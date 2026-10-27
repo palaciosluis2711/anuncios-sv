@@ -201,3 +201,64 @@ export const getFavoriteProducts = (user = null) => {
   const all = getStoredProducts();
   return all.filter((p) => favoriteIds.includes(String(p.id)));
 };
+
+/**
+ * Obtiene todas las publicaciones pertenecientes a un vendedor por su id o nombre
+ */
+export const getProductsBySellerId = (sellerId) => {
+  if (!sellerId) return [];
+  const decodedId = decodeURIComponent(sellerId).trim().toLowerCase();
+  const all = getStoredProducts();
+
+  return all.filter((p) => {
+    const sId = String(p.seller?.id || "").trim().toLowerCase();
+    const sName = String(p.seller?.name || "").trim().toLowerCase();
+    const sUsername = String(p.seller?.username || "").trim().toLowerCase().replace("@", "");
+    return sId === decodedId || sName === decodedId || sUsername === decodedId;
+  });
+};
+
+/**
+ * Obtiene la información de perfil de un vendedor a partir de sus publicaciones
+ */
+export const getSellerInfo = (sellerId) => {
+  if (!sellerId) return null;
+  const decodedId = decodeURIComponent(sellerId).trim().toLowerCase();
+  const all = getStoredProducts();
+
+  const match = all.find((p) => {
+    const sId = String(p.seller?.id || "").trim().toLowerCase();
+    const sName = String(p.seller?.name || "").trim().toLowerCase();
+    const sUsername = String(p.seller?.username || "").trim().toLowerCase().replace("@", "");
+    return sId === decodedId || sName === decodedId || sUsername === decodedId;
+  });
+
+  if (match?.seller) {
+    return {
+      id: match.seller.id || sellerId,
+      name: match.seller.name || "Vendedor AnunciosSV",
+      username: match.seller.username || (match.seller.name ? `@${match.seller.name.toLowerCase().replace(/\s+/g, "_")}` : "@vendedor"),
+      avatar: match.seller.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+      rating: match.seller.rating || 5.0,
+      reviewsCount: match.seller.reviewsCount || 0,
+      verified: Boolean(match.seller.verified),
+      location: match.department || match.location || "San Salvador, El Salvador",
+      memberSince: "Marzo 2024",
+      bio: "Comerciante activo en AnunciosSV ofreciendo productos verificados y atención confiable."
+    };
+  }
+
+  // Fallback si no hay publicaciones coincidentes
+  return {
+    id: sellerId,
+    name: decodeURIComponent(sellerId),
+    username: `@${decodeURIComponent(sellerId).toLowerCase().replace(/\s+/g, "_")}`,
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+    rating: 5.0,
+    reviewsCount: 0,
+    verified: false,
+    location: "El Salvador",
+    memberSince: "2024",
+    bio: "Miembro de la comunidad AnunciosSV."
+  };
+};

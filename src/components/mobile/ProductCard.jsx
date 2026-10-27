@@ -37,24 +37,29 @@ export const ProductCard = ({ product }) => {
 
   return (
     <article className="group bg-slate-900/90 border border-slate-800/80 rounded-2xl overflow-hidden shadow-lg hover:border-slate-700/80 transition-all duration-300">
-      {/* Cabecera del vendedor estilo Red Social */}
+      {/* Cabecera del vendedor estilo Red Social con enlace a su perfil */}
       <div className="p-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <Link
+          to={`/seller/${encodeURIComponent(product.seller?.id || product.seller?.name || "vendedor")}`}
+          className="flex items-center gap-2.5 group/seller hover:opacity-90 transition-opacity"
+        >
           <img
             src={product.seller?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"}
             alt={product.seller?.name || "Vendedor"}
-            className="w-8 h-8 rounded-full object-cover border border-slate-700"
+            className="w-8 h-8 rounded-full object-cover border border-slate-700 group-hover/seller:border-indigo-500 transition-colors"
           />
           <div>
             <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold text-slate-200">{product.seller?.name || "Usuario"}</span>
+              <span className="text-xs font-semibold text-slate-200 group-hover/seller:text-indigo-300 transition-colors">
+                {product.seller?.name || "Usuario"}
+              </span>
               {product.seller?.verified && (
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-500/20" />
               )}
             </div>
             <span className="text-[10px] text-slate-400">{product.createdAt || "Reciente"}</span>
           </div>
-        </div>
+        </Link>
 
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
           {product.categoryName || product.subcategoryName || "Clasificado"}

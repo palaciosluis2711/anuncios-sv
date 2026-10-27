@@ -18,6 +18,7 @@ export const MobileHeader = () => {
   const isLoginPage = pathname === "/login";
   const isPublishPage = pathname === "/publish";
   const isProductDetailPage = pathname.startsWith("/product/");
+  const isSellerProfilePage = pathname.startsWith("/seller/");
 
   // Función segura para retornar atrás
   const handleBack = () => {
@@ -118,8 +119,10 @@ export const MobileHeader = () => {
     );
   }
 
-  // 3. En detalle de publicación: NO se muestra el header general, en su lugar flecha de regresar fija con z-50
-  if (isProductDetailPage) {
+  // 3. En detalle de publicación o perfil del vendedor: flecha de regresar fija con z-50
+  if (isProductDetailPage || isSellerProfilePage) {
+    const pageTitle = isSellerProfilePage ? "Perfil del Vendedor" : "Detalle del Anuncio";
+
     return (
       <header className="sticky top-0 z-50 bg-slate-950 border-b border-slate-800/90 px-4 py-2.5 shadow-md">
         <div className="max-w-md mx-auto flex items-center justify-between">
@@ -133,13 +136,13 @@ export const MobileHeader = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <span className="text-sm font-bold text-white tracking-tight">Detalle del Anuncio</span>
+          <span className="text-sm font-bold text-white tracking-tight">{pageTitle}</span>
 
           <button
             type="button"
             onClick={handleShare}
             className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all shadow-sm"
-            aria-label="Compartir publicación"
+            aria-label="Compartir"
             title="Compartir"
           >
             <Share2 className="w-4.5 h-4.5" />

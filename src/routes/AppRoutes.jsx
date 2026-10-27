@@ -15,6 +15,7 @@ import ExplorePage from "../pages/mobile/ExplorePage";
 import PublishPage from "../pages/mobile/PublishPage";
 import ProfilePage from "../pages/mobile/ProfilePage";
 import ProductDetailPage from "../pages/mobile/ProductDetailPage";
+import SellerProfilePage from "../pages/mobile/SellerProfilePage";
 import LoginPage from "../pages/mobile/LoginPage";
 
 // Páginas del Panel Webmaster (Admin)
@@ -52,6 +53,9 @@ export const AppRoutes = () => {
         
         {/* Detalle del producto */}
         <Route path="/product/:id" element={<ProductDetailPage />} />
+
+        {/* Perfil público del vendedor */}
+        <Route path="/seller/:sellerId" element={<SellerProfilePage />} />
         
         {/* Autenticación / Login */}
         <Route path="/login" element={<LoginPage />} />

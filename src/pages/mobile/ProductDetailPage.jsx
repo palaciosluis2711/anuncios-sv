@@ -59,6 +59,13 @@ export const ProductDetailPage = () => {
   const [isLiked, setIsLiked] = useState(() => isProductFavorite(product.id, currentUser));
   const [likesCount, setLikesCount] = useState(product.likesCount || 0);
 
+  // Asegurar que la pantalla siempre aparezca en el tope con la portada primero
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [id]);
+
   useEffect(() => {
     setIsLiked(isProductFavorite(product.id, currentUser));
     setLikesCount(product.likesCount || 0);
@@ -103,12 +110,9 @@ export const ProductDetailPage = () => {
     setActiveImageIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
   };
 
-  // Mensaje preparado para WhatsApp
-  const sellerPhone = product.seller?.phone || "50370000000";
-  const whatsappMessage = encodeURIComponent(
-    `Hola ${product.seller?.name || "amigo"}, vi tu anuncio "${product.title}" en AnunciosSV y me interesa obtener más información.`
-  );
-  const whatsappUrl = `https://wa.me/${sellerPhone}?text=${whatsappMessage}`;
+  const handleSendMessage = () => {
+    alert(`La mensajería interna con ${product.seller?.name || "el vendedor"} estará disponible próximamente en AnunciosSV.`);
+  };
 
   return (
     <div className="space-y-4 pb-8 animate-fade-in">
@@ -434,21 +438,36 @@ export const ProductDetailPage = () => {
           </div>
         </div>
 
-        {/* 8. Tarjeta del Vendedor */}
+        {/* 8. Tarjeta del Vendedor (enlace directo a su perfil completo) */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-md">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Publicado por
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Publicado por
+            </span>
+            <Link
+              to={`/seller/${encodeURIComponent(product.seller?.id || product.seller?.name || "vendedor")}`}
+              className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+            >
+              <span>Ver perfil</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-          <div className="flex items-center justify-between gap-3">
+
+          <Link
+            to={`/seller/${encodeURIComponent(product.seller?.id || product.seller?.name || "vendedor")}`}
+            className="flex items-center justify-between gap-3 group active:scale-[0.99] transition-all"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <img
                 src={product.seller?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"}
                 alt={product.seller?.name || "Vendedor"}
-                className="w-12 h-12 rounded-full object-cover border border-slate-700 flex-shrink-0"
+                className="w-12 h-12 rounded-full object-cover border-2 border-slate-700 group-hover:border-indigo-500 transition-colors flex-shrink-0"
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold text-white truncate">{product.seller?.name || "Vendedor"}</span>
+                  <span className="text-sm font-bold text-white truncate group-hover:text-indigo-300 transition-colors">
+                    {product.seller?.name || "Vendedor"}
+                  </span>
                   {product.seller?.verified && (
                     <CheckCircle2 className="w-4 h-4 text-blue-400 fill-blue-500/20 flex-shrink-0" />
                   )}
@@ -461,33 +480,27 @@ export const ProductDetailPage = () => {
               </div>
             </div>
 
-            {product.seller?.verified && (
-              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/30 whitespace-nowrap">
-                Verificado
-              </span>
-            )}
-          </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {product.seller?.verified && (
+                <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/30 whitespace-nowrap">
+                  Verificado
+                </span>
+              )}
+              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+          </Link>
         </div>
 
-        {/* 9. Botones de Acción Directa (altura táctil estándar min-h-[48px]) */}
-        <div className="grid grid-cols-2 gap-2.5 pt-1">
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.99]"
+        {/* 9. Botón de Acción Directa: Enviar mensaje interno */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={handleSendMessage}
+            className="w-full min-h-[50px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
           >
-            <MessageCircle className="w-4.5 h-4.5" />
-            <span>WhatsApp</span>
-          </a>
-
-          <a
-            href={`tel:${sellerPhone}`}
-            className="flex items-center justify-center gap-2 min-h-[48px] py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99]"
-          >
-            <PhoneCall className="w-4.5 h-4.5" />
-            <span>Llamar</span>
-          </a>
+            <MessageCircle className="w-5 h-5" />
+            <span>Enviar mensaje</span>
+          </button>
         </div>
 
         {/* 10. Consejos de Seguridad para Compradores en El Salvador */}
