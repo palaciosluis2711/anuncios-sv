@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    @apply antialiased text-slate-100 bg-slate-950 min-h-screen font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Personalización de barra de scroll moderna */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700/60 rounded-full hover:bg-slate-600;
+  }
+
+  /* Eliminar flechas de incremento/decremento en inputs numéricos */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Estilizado global de comboboxes (<select>) y sus items desplegados (<option>) */
+  select {
+    color-scheme: dark;
+    background-color: #0f172a;
+    color: #f8fafc;
+    cursor: pointer;
+  }
+
+  select:focus {
+    outline: none;
+  }
+
+  /* Opciones dentro del menú desplegable */
+  select option {
+    background-color: #0f172a;
+    color: #f1f5f9;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  select option:hover,
+  select option:focus {
+    background-color: #4f46e5;
+    color: #ffffff;
+  }
+
+  select option:checked {
+    background-color: #4338ca;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  select optgroup {
+    background-color: #020617;
+    color: #94a3b8;
+    font-weight: 700;
+    padding: 6px 10px;
+  }
+}
+
+@layer utilities {
+  /* Efecto Glassmorphism */
+  .glass-panel {
+    @apply bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-glass;
+  }
+
+  .glass-header {
+    @apply bg-slate-950/85 backdrop-blur-lg border-b border-slate-800/80;
+  }
+
+  .glass-nav {
+    @apply bg-slate-900/90 backdrop-blur-lg border-t border-slate-800/90;
+  }
+
+  /* Gradientes de texto */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400;
+  }
+
+  .text-gradient-emerald {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400;
+  }
+
+  /* Ocultar barra de scroll en contenedores horizontales */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

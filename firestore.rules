@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Verifica si el usuario actual es Webmaster/Admin
+    function isAdmin() {
+      return request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         request.auth.token.email == 'admin@anunciossv.app' ||
+         request.auth.token.email == 'admin@anunciossv.com' ||
+         request.auth.token.email == 'admin@mercadosocial.com');
+    }
+
+    // Helper: Verifica si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ============================================================
+    // COLECCIÓN DE NOMBRES DE USUARIO ÚNICOS (usernames)
+    // ============================================================
+    // Garantiza unicidad atómica estricta: cualquiera puede verificar disponibilidad,
+    // pero solo se puede reclamar una vez si el documento no existe.
+    match /usernames/{username} {
+      allow read: if true; // Permite verificar disponibilidad públicamente antes de registrar
+      allow create: if isAuthenticated() && 
+                       request.resource.data.uid == request.auth.uid &&
+                       !exists(/databases/$(database)/documents/usernames/$(username));
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================================
+    // COLECCIÓN DE USUARIOS (users)
+    // ============================================================
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    // COLECCIÓN DE PRODUCTOS Y CLASIFICADOS (products)
+    // ============================================================
+    match /products/{productId} {
+      allow read: if resource.data.status == 'aprobado' || 
+                     (isAuthenticated() && resource.data.seller.id == request.auth.uid) || 
+                     isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if (isAuthenticated() && resource.data.seller.id == request.auth.uid) || isAdmin();
+      allow delete: if (isAuthenticated() && resource.data.seller.id == request.auth.uid) || isAdmin();
+    }
+
+    // ============================================================
+    // COLECCIÓN DE CATEGORÍAS (categories)
+    // ============================================================
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ============================================================
+    // COLECCIÓN DE PUBLICIDAD Y BANNERS (ads)
+    // ============================================================
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
