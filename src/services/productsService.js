@@ -4,6 +4,8 @@ import { MOCK_PRODUCTS } from "./mockData";
 
 const STORAGE_KEY = "anunciossv_products_v1";
 const UPDATE_EVENT = "anunciossv_products_updated";
+export const FAVORITES_STORAGE_KEY = "anunciossv_favorites_v1";
+export const FAVORITES_EVENT = "anunciossv_favorites_updated";
 
 /**
  * Obtiene todos los productos guardados (localStorage + mock inicial)
@@ -100,4 +102,102 @@ export const getUserProducts = (user) => {
       (email && sellerEmail && sellerEmail.toLowerCase() === email.toLowerCase())
     );
   });
+};
+
+/**
+ * Obtiene la lista de IDs de anuncios marcados como favoritos
+ */
+export const getFavoriteIds = (user = null) => {
+  try {
+    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error("Error al leer favoritos de localStorage:", err);
+  }
+
+  // Inicializar con los productos marcados inicialmente con isLiked en los datos mock
+  const initialFavorites = MOCK_PRODUCTS.filter((p) => p.isLiked).map((p) => String(p.id));
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(initialFavorites));
+  } catch (err) {
+    console.warn("No se pudo escribir favoritos iniciales en localStorage:", err);
+  }
+  return initialFavorites;
+};
+
+/**
+ * Verifica si un producto específico está en favoritos
+ */
+export const isProductFavorite = (productId, user = null) => {
+  if (!productId) return false;
+  const favorites = getFavoriteIds(user);
+  return favorites.includes(String(productId));
+};
+
+/**
+ * Alterna el estado de favorito de un producto y actualiza sus me gusta
+ */
+export const toggleFavoriteProduct = (productId, user = null) => {
+  if (!productId) return { isFavorite: false, likesCount: 0 };
+  const targetId = String(productId);
+  const currentFavorites = getFavoriteIds(user);
+  const isAlreadyFavorite = currentFavorites.includes(targetId);
+
+  const updatedFavorites = isAlreadyFavorite
+    ? currentFavorites.filter((id) => id !== targetId)
+    : [...currentFavorites, targetId];
+
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(updatedFavorites));
+  } catch (err) {
+    console.error("Error al actualizar favoritos en localStorage:", err);
+  }
+
+  // Actualizar también el contador de likes en la lista persistida de productos
+  const products = getStoredProducts();
+  let updatedLikesCount = 0;
+  const isNowFavorite = !isAlreadyFavorite;
+
+  const updatedProducts = products.map((prod) => {
+    if (String(prod.id) === targetId) {
+      const currentLikes = Number(prod.likesCount) || 0;
+      updatedLikesCount = isNowFavorite ? currentLikes + 1 : Math.max(0, currentLikes - 1);
+      return {
+        ...prod,
+        likesCount: updatedLikesCount,
+        isLiked: isNowFavorite
+      };
+    }
+    return prod;
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProducts));
+  } catch (err) {
+    console.error("Error al persistir productos con like en localStorage:", err);
+  }
+
+  // Notificar a toda la aplicación para sincronización instantánea
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(FAVORITES_EVENT, {
+        detail: { productId: targetId, isFavorite: isNowFavorite, likesCount: updatedLikesCount }
+      })
+    );
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: { productId: targetId } }));
+  }
+
+  return { isFavorite: isNowFavorite, likesCount: updatedLikesCount };
+};
+
+/**
+ * Obtiene la lista completa de objetos de productos favoritos
+ */
+export const getFavoriteProducts = (user = null) => {
+  const favoriteIds = getFavoriteIds(user);
+  const all = getStoredProducts();
+  return all.filter((p) => favoriteIds.includes(String(p.id)));
 };

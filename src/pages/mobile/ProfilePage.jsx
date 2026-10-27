@@ -17,22 +17,35 @@ import {
   LogIn,
   PlusCircle
 } from "lucide-react";
-import { getStoredProducts, getUserProducts } from "../../services/productsService";
+import {
+  getStoredProducts,
+  getUserProducts,
+  getFavoriteProducts,
+  toggleFavoriteProduct,
+  FAVORITES_EVENT
+} from "../../services/productsService";
 
 export const ProfilePage = () => {
   const { currentUser, isAdmin, logout, switchDemoRole } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("posts");
   const [allProducts, setAllProducts] = useState(() => getStoredProducts());
+  const [favoriteProducts, setFavoriteProducts] = useState(() => getFavoriteProducts(currentUser));
 
-  // Sincronizar en tiempo real cuando se publica un nuevo producto
+  // Sincronizar en tiempo real cuando se publica un producto o se actualizan favoritos
   useEffect(() => {
     const handleUpdate = () => {
       setAllProducts(getStoredProducts());
+      setFavoriteProducts(getFavoriteProducts(currentUser));
     };
+
     window.addEventListener("anunciossv_products_updated", handleUpdate);
-    return () => window.removeEventListener("anunciossv_products_updated", handleUpdate);
-  }, []);
+    window.addEventListener(FAVORITES_EVENT, handleUpdate);
+    return () => {
+      window.removeEventListener("anunciossv_products_updated", handleUpdate);
+      window.removeEventListener(FAVORITES_EVENT, handleUpdate);
+    };
+  }, [currentUser]);
 
   if (!currentUser) {
     return (
@@ -137,7 +150,7 @@ export const ProfilePage = () => {
               : "text-slate-400 hover:text-slate-200"
           }`}
         >
-          Favoritos
+          Favoritos ({favoriteProducts.length})
         </button>
         <button
           onClick={() => setActiveTab("settings")}
@@ -229,10 +242,95 @@ export const ProfilePage = () => {
 
       {/* Contenido de Favoritos */}
       {activeTab === "saved" && (
-        <div className="p-6 text-center text-xs text-slate-400 bg-slate-900/50 rounded-xl border border-slate-800 animate-fade-in">
-          <Heart className="w-8 h-8 mx-auto text-rose-400 mb-2 fill-rose-500/20" />
-          <h4 className="font-bold text-white text-sm mb-1">Tus Anuncios Guardados</h4>
-          <p>Los clasificados que marques con "Me gusta" aparecerán organizados aquí para acceso rápido.</p>
+        <div className="space-y-2.5 animate-fade-in">
+          {favoriteProducts.length > 0 ? (
+            favoriteProducts.map((prod) => (
+              <div
+                key={prod.id}
+                className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 shadow-sm hover:border-slate-700 transition-all"
+              >
+                <Link
+                  to={`/product/${prod.id}`}
+                  className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-800 flex-shrink-0 block"
+                >
+                  <img
+                    src={prod.image || (prod.images && prod.images[0])}
+                    alt={prod.title}
+                    className="w-full h-full object-cover"
+                  />
+                  {prod.featured && (
+                    <span className="absolute top-1 right-1 p-0.5 rounded bg-amber-500 text-slate-950">
+                      <Sparkles className="w-2.5 h-2.5 fill-current" />
+                    </span>
+                  )}
+                </Link>
+
+                <div className="flex-1 min-w-0">
+                  <Link to={`/product/${prod.id}`} className="block">
+                    <h4 className="text-xs font-bold text-white truncate hover:text-indigo-300 transition-colors">
+                      {prod.title}
+                    </h4>
+                  </Link>
+
+                  <div className="text-xs font-semibold text-indigo-400 mt-0.5 flex items-center gap-1.5">
+                    {prod.isFree ? (
+                      <span className="text-emerald-400 font-bold">GRATIS</span>
+                    ) : (
+                      <span>${Number(prod.price).toFixed(2)} {prod.currency || "USD"}</span>
+                    )}
+                    {prod.isNegotiable && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                        Negociable
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                    <span className="truncate max-w-[130px]">{prod.location}</span>
+                    {prod.condition && <span>· {prod.condition}</span>}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => toggleFavoriteProduct(prod.id, currentUser)}
+                    className="p-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors active:scale-95"
+                    title="Quitar de favoritos"
+                    aria-label="Quitar de favoritos"
+                  >
+                    <Heart className="w-4 h-4 fill-current" />
+                  </button>
+
+                  <Link
+                    to={`/product/${prod.id}`}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    title="Ver en detalle"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-6 text-center text-xs text-slate-400 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+                <Heart className="w-6 h-6 fill-rose-500/20" />
+              </div>
+              <div>
+                <h4 className="font-bold text-white text-sm">No tienes anuncios guardados</h4>
+                <p className="mt-1 text-slate-400">
+                  Presiona el corazón en cualquier publicación del feed para guardarla aquí y consultarla cuando quieras.
+                </p>
+              </div>
+              <Link
+                to="/"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all active:scale-95"
+              >
+                <span>Explorar Anuncios</span>
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

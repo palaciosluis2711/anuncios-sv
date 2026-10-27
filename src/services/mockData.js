@@ -36,6 +36,30 @@ export const PRODUCT_CONDITIONS = [
   "Para repuestos"
 ];
 
+// Opciones de Preferencias de Entrega para productos
+export const DELIVERY_OPTIONS = [
+  {
+    id: "public_place",
+    label: "Lugar Público",
+    detail: "Acordar punto con el vendedor"
+  },
+  {
+    id: "pickup",
+    label: "Retiro en Local",
+    detail: "En tienda o ubicación física"
+  },
+  {
+    id: "store_pickup",
+    label: "Retiro en Local",
+    detail: "El comprador retira en tu dirección o tienda"
+  },
+  {
+    id: "shipping",
+    label: "Envío",
+    detail: "Si se ofrece envío o encomienda"
+  }
+];
+
 // Jerarquía de Categorías Principales y Subcategorías para el Editor de Anuncios
 export const PUBLICATION_HIERARCHY = [
   {

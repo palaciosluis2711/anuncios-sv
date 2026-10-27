@@ -1,22 +1,38 @@
 // Tarjeta de publicación de producto/servicio optimizada para el feed móvil
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Heart, MapPin, CheckCircle2, Eye, Sparkles } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { isProductFavorite, toggleFavoriteProduct, FAVORITES_EVENT } from "../../services/productsService";
 
 export const ProductCard = ({ product }) => {
-  const [isLiked, setIsLiked] = useState(product.isLiked || false);
+  const { currentUser } = useAuth();
+  const [isLiked, setIsLiked] = useState(() => isProductFavorite(product.id, currentUser));
   const [likesCount, setLikesCount] = useState(product.likesCount || 0);
+
+  useEffect(() => {
+    setIsLiked(isProductFavorite(product.id, currentUser));
+    setLikesCount(product.likesCount || 0);
+
+    const handleFavUpdate = (e) => {
+      if (String(e.detail?.productId) === String(product.id)) {
+        setIsLiked(Boolean(e.detail.isFavorite));
+        if (typeof e.detail.likesCount === "number") {
+          setLikesCount(e.detail.likesCount);
+        }
+      }
+    };
+
+    window.addEventListener(FAVORITES_EVENT, handleFavUpdate);
+    return () => window.removeEventListener(FAVORITES_EVENT, handleFavUpdate);
+  }, [product.id, product.likesCount, currentUser]);
 
   const toggleLike = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isLiked) {
-      setLikesCount((prev) => Math.max(0, prev - 1));
-      setIsLiked(false);
-    } else {
-      setLikesCount((prev) => prev + 1);
-      setIsLiked(true);
-    }
+    const result = toggleFavoriteProduct(product.id, currentUser);
+    setIsLiked(result.isFavorite);
+    setLikesCount(result.likesCount);
   };
 
   return (
@@ -64,15 +80,16 @@ export const ProductCard = ({ product }) => {
 
         {/* Botón flotante de Me Gusta */}
         <button
+          type="button"
           onClick={toggleLike}
-          aria-label={isLiked ? "Quitar me gusta" : "Dar me gusta"}
-          className={`absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-transform active:scale-90 ${
+          aria-label={isLiked ? "Quitar de favoritos" : "Guardar en favoritos"}
+          className={`absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-all active:scale-90 z-10 ${
             isLiked
-              ? "bg-rose-500/90 text-white shadow-lg shadow-rose-500/30"
+              ? "bg-rose-500 text-white shadow-lg shadow-rose-500/40 ring-2 ring-rose-400/30"
               : "bg-slate-950/60 text-slate-200 hover:text-white hover:bg-slate-950/80"
           }`}
         >
-          <Heart className={`w-4 h-4 ${isLiked ? "fill-current" : ""}`} />
+          <Heart className={`w-4 h-4 transition-transform ${isLiked ? "fill-white scale-105" : ""}`} />
         </button>
 
         {/* Barra inferior de la foto con precio */}
