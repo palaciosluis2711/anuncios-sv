@@ -26,6 +26,14 @@ export const CustomSelect = ({
 
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+  const listRef = useRef(null);
+  const selectedItemRef = useRef(null);
+  const touchStartYRef = useRef(0);
+  const touchStartXRef = useRef(0);
+  const isDraggingAtBottomRef = useRef(false);
+  const wheelTimeoutRef = useRef(null);
+  const [bounceOffset, setBounceOffset] = useState(0);
+  const [showBounceIndicator, setShowBounceIndicator] = useState(false);
 
   // Normalizar opciones: soporta tanto arreglos de strings como arreglos de objetos { id, name } o { value, label }
   const normalizedOptions = options.map((opt) => {
@@ -118,6 +126,125 @@ export const CustomSelect = ({
     };
   }, [isOpen, updatePosition]);
 
+  // Al abrir el combobox, posicionar el elemento seleccionado como el primer elemento a la vista
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Ejecutar tras el render del portal para sincronizar el scroll al elemento previamente seleccionado
+    const timer = setTimeout(() => {
+      if (selectedItemRef.current && listRef.current) {
+        listRef.current.scrollTop = selectedItemRef.current.offsetTop;
+      }
+    }, 15);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, value]);
+
+  // Control de scroll y rebote táctil en el límite inferior del combobox
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const listEl = listRef.current;
+    if (!listEl) return;
+
+    const handleTouchStart = (e) => {
+      if (e.touches && e.touches.length === 1) {
+        touchStartYRef.current = e.touches[0].clientY;
+        touchStartXRef.current = e.touches[0].clientX;
+        isDraggingAtBottomRef.current = false;
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (!e.touches || e.touches.length === 0) return;
+      const currentY = e.touches[0].clientY;
+      const currentX = e.touches[0].clientX;
+      const deltaY = currentY - touchStartYRef.current;
+      const deltaX = currentX - touchStartXRef.current;
+
+      // Procesar exclusivamente desplazamientos predominantemente verticales
+      if (Math.abs(deltaY) < Math.abs(deltaX) * 0.7) return;
+
+      const isAtBottom = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 3;
+      const isAtTop = listEl.scrollTop <= 0;
+
+      // 1. Bloquear arrastre hacia abajo en el tope para no desplazar la página
+      if (isAtTop && deltaY > 0) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+
+      // 2. Al llegar al último ítem y continuar deslizando hacia arriba (deltaY < 0):
+      // Bloquear estrictamente el scroll de la página y activar el indicador de rebote amarillo
+      if (isAtBottom && deltaY < 0) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+
+        const pullDistance = Math.abs(deltaY);
+        // Resistencia elástica sutil y discreta (máx 10px)
+        const elasticDistance = Math.min(Math.pow(pullDistance, 0.6) * 1.0, 10);
+        setBounceOffset(elasticDistance);
+        setShowBounceIndicator(true);
+
+        // Feedback háptico sutil al topar con el fondo
+        if (!isDraggingAtBottomRef.current && typeof navigator !== "undefined" && navigator.vibrate) {
+          try {
+            navigator.vibrate(12);
+          } catch {}
+        }
+        isDraggingAtBottomRef.current = true;
+      } else if (isAtBottom && deltaY >= 0) {
+        setBounceOffset(0);
+        setShowBounceIndicator(false);
+        isDraggingAtBottomRef.current = false;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isDraggingAtBottomRef.current = false;
+      // Retorno elástico suave
+      setBounceOffset(0);
+      setTimeout(() => {
+        setShowBounceIndicator(false);
+      }, 250);
+    };
+
+    const handleWheel = (e) => {
+      const isAtBottom = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 3;
+      const isAtTop = listEl.scrollTop <= 0;
+
+      if (isAtBottom && e.deltaY > 0) {
+        if (e.cancelable) e.preventDefault();
+        setBounceOffset(6);
+        setShowBounceIndicator(true);
+        clearTimeout(wheelTimeoutRef.current);
+        wheelTimeoutRef.current = setTimeout(() => {
+          setBounceOffset(0);
+          setShowBounceIndicator(false);
+        }, 280);
+      } else if (isAtTop && e.deltaY < 0) {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    listEl.addEventListener("touchstart", handleTouchStart, { passive: true });
+    listEl.addEventListener("touchmove", handleTouchMove, { passive: false });
+    listEl.addEventListener("touchend", handleTouchEnd, { passive: true });
+    listEl.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    listEl.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      listEl.removeEventListener("touchstart", handleTouchStart);
+      listEl.removeEventListener("touchmove", handleTouchMove);
+      listEl.removeEventListener("touchend", handleTouchEnd);
+      listEl.removeEventListener("touchcancel", handleTouchEnd);
+      listEl.removeEventListener("wheel", handleWheel);
+      clearTimeout(wheelTimeoutRef.current);
+    };
+  }, [isOpen]);
+
   const handleSelect = (optValue) => {
     onChange?.(optValue);
     setIsOpen(false);
@@ -162,34 +289,65 @@ export const CustomSelect = ({
               bottom: coords.bottom !== undefined ? `${coords.bottom}px` : "auto",
               left: `${coords.left}px`,
               width: `${coords.width}px`,
-              zIndex: 99999
+              zIndex: 99999,
+              overscrollBehaviorY: "contain"
             }}
-            className="rounded-2xl bg-slate-900/95 backdrop-blur-2xl border border-slate-700/90 shadow-2xl shadow-black/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            className="rounded-2xl bg-slate-900/95 backdrop-blur-2xl border border-slate-700/90 shadow-2xl shadow-black/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
           >
             <div
-              style={{ maxHeight: `${coords.maxHeight}px` }}
-              className="p-1.5 overflow-y-auto no-scrollbar space-y-1"
+              ref={listRef}
+              style={{
+                maxHeight: `${coords.maxHeight}px`,
+                overscrollBehaviorY: "contain"
+              }}
+              className="p-1.5 overflow-y-auto no-scrollbar overscroll-contain overscroll-y-contain relative"
             >
-              {normalizedOptions.map((opt) => {
-                const isSelected = opt.value === value;
-                return (
-                  <button
-                    key={String(opt.value)}
-                    type="button"
-                    onClick={() => handleSelect(opt.value)}
-                    className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-sm flex items-center justify-between text-left transition-all ${
-                      isSelected
-                        ? "bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/30"
-                        : "text-slate-200 hover:bg-slate-800/80 hover:text-white"
-                    }`}
-                  >
-                    <span className="truncate">{opt.label}</span>
-                    {isSelected && (
-                      <Check className="w-4 h-4 ml-2 flex-shrink-0 text-indigo-400" />
-                    )}
-                  </button>
-                );
-              })}
+              {/* Contenedor elástico con animación de rebote hacia arriba */}
+              <div
+                style={{
+                  transform: bounceOffset > 0 ? `translateY(-${bounceOffset}px)` : "translateY(0)",
+                  transition:
+                    bounceOffset > 0
+                      ? "transform 0.05s ease-out"
+                      : "transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+                }}
+                className="space-y-1"
+              >
+                {normalizedOptions.map((opt) => {
+                  const isSelected = opt.value === value;
+                  return (
+                    <button
+                      key={String(opt.value)}
+                      ref={isSelected ? selectedItemRef : null}
+                      type="button"
+                      onClick={() => handleSelect(opt.value)}
+                      className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-sm flex items-center justify-between text-left transition-all ${
+                        isSelected
+                          ? "bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/30"
+                          : "text-slate-200 hover:bg-slate-800/80 hover:text-white"
+                      }`}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {isSelected && (
+                        <Check className="w-4 h-4 ml-2 flex-shrink-0 text-indigo-400" />
+                      )}
+                    </button>
+                  );
+                })}
+
+                {/* Indicador discreto de rebote de color amarillo al final del último ítem */}
+                <div
+                  style={{
+                    opacity: showBounceIndicator ? 0.95 : 0,
+                    transform: `scaleX(${showBounceIndicator ? 1 : 0.6})`,
+                    maxHeight: showBounceIndicator ? "14px" : "0px",
+                    transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+                  }}
+                  className="overflow-hidden flex items-center justify-center pt-1 pb-0.5 select-none pointer-events-none"
+                >
+                  <div className="w-10 h-1 rounded-full bg-amber-400/90 shadow-sm" />
+                </div>
+              </div>
             </div>
           </div>,
           document.body

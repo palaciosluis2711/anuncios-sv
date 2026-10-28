@@ -118,7 +118,7 @@ export const AdminModeration = () => {
                   <div className="flex-1 min-w-0">
                     <h4 className="text-xs font-bold text-white truncate">{item.title}</h4>
                     <div className="text-xs font-semibold text-indigo-400 mt-0.5">
-                      ${item.price} {item.currency} · <span className="text-slate-400">{item.categoryName}</span>
+                      ${Number(item.price || 0).toFixed(2)} {item.currency || "USD"} · <span className="text-slate-400">{item.categoryName}</span>
                     </div>
                     <p className="text-[11px] text-slate-400 line-clamp-2 mt-1">
                       {item.description}

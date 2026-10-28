@@ -53,7 +53,7 @@ export const AdminSidebar = ({ isMobileOpen, setIsMobileOpen }) => {
 
   const handleLogout = async () => {
     await logout();
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   return (

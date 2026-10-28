@@ -11,6 +11,10 @@ export const RoleSwitcherBanner = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const isInAdmin = location.pathname.startsWith("/admin");
+  const isChatDetail = location.pathname.startsWith("/messages/");
+
+  // Ocultar el selector flotante en la vista de chat para no obstruir el teclado ni el input fijo
+  if (isChatDetail) return null;
 
   return (
     <aside aria-label="Selector de rol demo" className="fixed bottom-20 sm:bottom-4 right-4 z-50">

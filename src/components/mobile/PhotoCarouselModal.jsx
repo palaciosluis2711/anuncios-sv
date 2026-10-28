@@ -20,11 +20,25 @@ export const PhotoCarouselModal = ({
   onSetPrimary,
   onTriggerReplace,
   onDelete,
-  onTriggerAdd
+  onTriggerAdd,
+  readOnly = false,
+  title,
+  sellerName = "",
+  interactiveDeploy = null
 }) => {
   // Estados para el arrastre y deslizamiento táctil suave
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Estados de ciclo de vida para entrada y salida animada suave
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isVisible, setIsVisible] = useState(false);
+  const isClosingRef = useRef(false);
+
+  // Valores derivados para el despliegue interactivo en tiempo real al arrastrar hacia abajo
+  const isDeploying = Boolean(interactiveDeploy?.isDeploying);
+  const deployProgress = isDeploying ? (interactiveDeploy?.progress ?? 0) : (isVisible ? 1 : 0);
+  const deployOffsetY = isDeploying ? (interactiveDeploy?.offsetY ?? 0) : 0;
 
   // Referencias para el control de gestos fluido
   const isPointerDownRef = useRef(false);
@@ -34,7 +48,58 @@ export const PhotoCarouselModal = ({
   const startTimeRef = useRef(0);
   const currentOffsetRef = useRef(0);
   const directionLockedRef = useRef(null);
+  const startedOnImageRef = useRef(false);
+  const activeImgRef = useRef(null);
   const thumbnailContainerRef = useRef(null);
+
+  // Sincronizar montaje y animación suave al abrir o cerrar (o durante despliegue interactivo)
+  useEffect(() => {
+    if (isDeploying) {
+      isClosingRef.current = false;
+      setIsRendered(true);
+      setIsVisible(true);
+      return;
+    }
+
+    if (isOpen) {
+      isClosingRef.current = false;
+      setIsRendered(true);
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, 20);
+      return () => clearTimeout(timer);
+    } else {
+      setIsVisible(false);
+      const timer = setTimeout(() => {
+        setIsRendered(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, isDeploying]);
+
+  // Cierre animado suave
+  const handleSmoothClose = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+      setIsRendered(false);
+      isClosingRef.current = false;
+    }, 280);
+  };
+
+  // Helper para verificar con precisión si unas coordenadas tocan dentro de la imagen activa
+  const isClickOnImage = (clientX, clientY) => {
+    if (!activeImgRef.current) return false;
+    const rect = activeImgRef.current.getBoundingClientRect();
+    return (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    );
+  };
 
   // Auto centrar miniatura activa en la barra inferior
   useEffect(() => {
@@ -59,7 +124,7 @@ export const PhotoCarouselModal = ({
 
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
-        onClose();
+        handleSmoothClose();
       } else if (e.key === "ArrowLeft") {
         handlePrev();
       } else if (e.key === "ArrowRight") {
@@ -75,7 +140,7 @@ export const PhotoCarouselModal = ({
     };
   }, [isOpen, photos.length, activeIndex]);
 
-  if (!isOpen || photos.length === 0) return null;
+  if (!isRendered || photos.length === 0) return null;
 
   // Navegación suave con límites (evita saltos bruscos de extremo a extremo)
   const handlePrev = () => {
@@ -92,12 +157,19 @@ export const PhotoCarouselModal = ({
 
   // 1. Inicio de toque o clic (Puntero unificado para táctil y ratón)
   const handlePointerDown = (e) => {
-    if (photos.length <= 1) return;
     if (e.button !== undefined && e.button !== 0) return; // Solo botón principal
 
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch (_) {}
+    // Registrar si el toque inició directamente sobre una imagen
+    startedOnImageRef.current = !!(
+      (e.target && (e.target.tagName === "IMG" || e.target.closest("img") !== null)) ||
+      isClickOnImage(e.clientX, e.clientY)
+    );
+
+    if (photos.length > 1) {
+      try {
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      } catch (_) {}
+    }
 
     pointerIdRef.current = e.pointerId;
     isPointerDownRef.current = true;
@@ -132,7 +204,7 @@ export const PhotoCarouselModal = ({
       }
     }
 
-    if (directionLockedRef.current === true) {
+    if (directionLockedRef.current === true && photos.length > 1) {
       // Amortiguación elástica en los extremos
       let offset = diffX;
       if (
@@ -164,55 +236,111 @@ export const PhotoCarouselModal = ({
     const isFlick = elapsed < 320 && Math.abs(diffX) > 28;
     const isPastThreshold = Math.abs(diffX) > 55;
 
-    if (isFlick || isPastThreshold) {
+    if (photos.length > 1 && (isFlick || isPastThreshold)) {
       if (diffX < 0 && activeIndex < photos.length - 1) {
         onSelectIndex(activeIndex + 1);
       } else if (diffX > 0 && activeIndex > 0) {
         onSelectIndex(activeIndex - 1);
+      }
+    } else if (readOnly && Math.abs(diffX) < 8 && elapsed < 350) {
+      // Tap o clic sin arrastre:
+      // REGLA FUNDAMENTAL: No salir al tocar la imagen; SOLAMENTE salir si se toca fuera de ella
+      const clickedOnImg =
+        startedOnImageRef.current ||
+        (e.target && (e.target.tagName === "IMG" || e.target.closest("img") !== null)) ||
+        isClickOnImage(e.clientX, e.clientY);
+
+      if (!clickedOnImg) {
+        handleSmoothClose();
+        return;
       }
     }
 
     currentOffsetRef.current = 0;
     setDragOffset(0);
     directionLockedRef.current = null;
+    startedOnImageRef.current = false;
   };
 
   const isPrimary = activeIndex === 0;
   const remainingSlots = 5 - photos.length;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] h-[100dvh] w-full bg-slate-950/98 backdrop-blur-2xl flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-200">
+    <div
+      onClick={(e) => {
+        // Al hacer clic fuera de la imagen en modo lectura, salir del visualizador de forma suave
+        if (readOnly) {
+          const clickedOnImg =
+            (e.target && (e.target.tagName === "IMG" || e.target.closest("img") !== null)) ||
+            isClickOnImage(e.clientX, e.clientY);
+          if (!clickedOnImg) {
+            handleSmoothClose();
+          }
+        }
+      }}
+      style={{
+        opacity: deployProgress,
+        pointerEvents: isVisible || isDeploying ? "auto" : "none"
+      }}
+      className={`fixed inset-0 z-[9999] h-[100dvh] w-full bg-slate-950/98 backdrop-blur-2xl flex flex-col justify-between overflow-hidden select-none ${
+        isDeploying ? "" : "transition-opacity duration-300 ease-out"
+      }`}
+    >
       {/* 1. Cabecera fija superior */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-800/80 bg-slate-950/80">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-white tracking-tight">Carrete de Fotos</span>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-            {activeIndex + 1} de {photos.length}
-          </span>
-          {remainingSlots > 0 ? (
-            <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-semibold border border-indigo-500/20">
-              Quedan {remainingSlots}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          opacity: deployProgress,
+          transform: isDeploying
+            ? `translateY(${(1 - deployProgress) * -35}px)`
+            : isVisible
+            ? "translateY(0)"
+            : "translateY(-16px)"
+        }}
+        className={`flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-800/80 bg-slate-950/80 ${
+          isDeploying ? "" : "transition-all duration-300 ease-out"
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0 pr-2">
+          {readOnly ? (
+            <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
+              Publicación de {sellerName || "usuario"} {activeIndex + 1}/{photos.length}
             </span>
           ) : (
-            <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 font-semibold border border-emerald-500/20">
-              Límite alcanzado
-            </span>
-          )}
-          {isPrimary && (
-            <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/30">
-              <Star className="w-3 h-3 fill-amber-400" />
-              Principal
-            </span>
+            <>
+              <span className="text-sm font-bold text-white tracking-tight">
+                {title || "Carrete de Fotos"}
+              </span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                {activeIndex + 1} de {photos.length}
+              </span>
+              {remainingSlots > 0 && (
+                <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-semibold border border-indigo-500/20">
+                  Quedan {remainingSlots}
+                </span>
+              )}
+              {remainingSlots <= 0 && (
+                <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 font-semibold border border-emerald-500/20">
+                  Límite alcanzado
+                </span>
+              )}
+              {isPrimary && (
+                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/30">
+                  <Star className="w-3 h-3 fill-amber-400" />
+                  Principal
+                </span>
+              )}
+            </>
           )}
         </div>
 
         <button
           type="button"
-          onClick={onClose}
-          className="min-h-[38px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow"
+          onClick={handleSmoothClose}
+          className="min-h-[38px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow flex-shrink-0"
         >
           <X className="w-4 h-4" />
-          <span>Listo</span>
+          <span>{readOnly ? "Cerrar" : "Listo"}</span>
         </button>
       </div>
 
@@ -222,7 +350,17 @@ export const PhotoCarouselModal = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden touch-pan-y cursor-grab active:cursor-grabbing select-none"
+        style={{
+          opacity: isDeploying ? Math.min(1, deployProgress * 1.3) : (isVisible ? 1 : 0),
+          transform: isDeploying
+            ? `translate3d(0, ${deployOffsetY * 0.35}px, 0) scale(${0.82 + deployProgress * 0.18})`
+            : isVisible
+            ? "scale(1) translate3d(0, 0, 0)"
+            : "scale(0.95) translate3d(0, 0, 0)"
+        }}
+        className={`flex-1 min-h-0 flex items-center justify-center relative overflow-hidden touch-pan-y cursor-grab active:cursor-grabbing select-none ${
+          isDeploying ? "" : "transition-all duration-300 ease-out"
+        }`}
       >
         {/* Contenedor tipo cinta continua con animación suave */}
         <div
@@ -241,10 +379,21 @@ export const PhotoCarouselModal = ({
               className="w-full h-full flex-shrink-0 flex items-center justify-center px-4 py-2 select-none"
             >
               <img
+                ref={idx === activeIndex ? activeImgRef : null}
                 src={photoUrl}
                 alt={`Foto ${idx + 1}`}
                 draggable={false}
-                className="max-h-[46dvh] sm:max-h-[56dvh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800/80 pointer-events-none select-none transition-transform duration-300"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                onPointerDown={() => {
+                  startedOnImageRef.current = true;
+                }}
+                className={`max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800/80 pointer-events-auto select-none transition-transform duration-300 ${
+                  readOnly
+                    ? "max-h-[68dvh] sm:max-h-[78dvh]"
+                    : "max-h-[46dvh] sm:max-h-[56dvh]"
+                }`}
               />
             </div>
           ))}
@@ -255,7 +404,10 @@ export const PhotoCarouselModal = ({
           <>
             <button
               type="button"
-              onClick={handlePrev}
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
               disabled={activeIndex === 0}
               className={`absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/85 hover:bg-indigo-600 active:scale-90 text-white flex items-center justify-center border border-slate-700/80 shadow-2xl transition-all z-20 ${
                 activeIndex === 0
@@ -269,7 +421,10 @@ export const PhotoCarouselModal = ({
             </button>
             <button
               type="button"
-              onClick={handleNext}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
               disabled={activeIndex === photos.length - 1}
               className={`absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-900/85 hover:bg-indigo-600 active:scale-90 text-white flex items-center justify-center border border-slate-700/80 shadow-2xl transition-all z-20 ${
                 activeIndex === photos.length - 1
@@ -286,89 +441,140 @@ export const PhotoCarouselModal = ({
       </div>
 
       {/* 3. Panel inferior de acciones y carrete de miniaturas */}
-      <div className="px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 space-y-2.5">
-        {/* Botones de acción directos (altura táctil estándar min-h-[44px]) */}
-        <div className="flex items-center gap-2">
-          {!isPrimary ? (
-            <button
-              type="button"
-              onClick={() => onSetPrimary(activeIndex)}
-              className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all"
+      {readOnly ? (
+        photos.length > 1 && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              opacity: deployProgress,
+              transform: isDeploying
+                ? `translateY(${(1 - deployProgress) * 35}px)`
+                : isVisible
+                ? "translateY(0)"
+                : "translateY(16px)"
+            }}
+            className={`px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 ${
+              isDeploying ? "" : "transition-all duration-300 ease-out"
+            }`}
+          >
+            <div
+              ref={thumbnailContainerRef}
+              className="flex items-center justify-center gap-2 overflow-x-auto py-1 no-scrollbar"
             >
-              <Star className="w-3.5 h-3.5 fill-white" />
-              <span>Definir como Imagen principal</span>
-            </button>
-          ) : (
-            <div className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400 text-xs font-semibold flex items-center justify-center gap-1.5 pointer-events-none">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>Imagen principal</span>
+              {photos.map((photoUrl, idx) => {
+                const isActive = idx === activeIndex;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onSelectIndex(idx)}
+                    className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden flex-shrink-0 transition-all border ${
+                      isActive
+                        ? "ring-2 ring-indigo-500 border-indigo-400 scale-105 shadow-md shadow-indigo-500/20"
+                        : "border-slate-800 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <img
+                      src={photoUrl}
+                      alt={`Miniatura ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                );
+              })}
             </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => onTriggerReplace(activeIndex)}
-            className="min-h-[44px] py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all border border-slate-700/60"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Cambiar</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDelete(activeIndex)}
-            className="min-h-[44px] py-2.5 px-3.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-500/30"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Eliminar</span>
-          </button>
-        </div>
-
-        {/* Carrete horizontal de miniaturas táctiles */}
+          </div>
+        )
+      ) : (
         <div
-          ref={thumbnailContainerRef}
-          className="flex items-center justify-center gap-2 overflow-x-auto py-1 no-scrollbar"
+          onClick={(e) => e.stopPropagation()}
+          className={`px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 space-y-2.5 transition-all duration-300 ease-out ${
+            isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+          }`}
         >
-          {photos.map((photoUrl, idx) => {
-            const isActive = idx === activeIndex;
-            const isItemPrimary = idx === 0;
-            return (
+          {/* Botones de acción directos (altura táctil estándar min-h-[44px]) */}
+          <div className="flex items-center gap-2">
+            {!isPrimary ? (
               <button
-                key={idx}
                 type="button"
-                onClick={() => onSelectIndex(idx)}
-                className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden flex-shrink-0 transition-all border ${
-                  isActive
-                    ? "ring-2 ring-indigo-500 border-indigo-400 scale-105 shadow-md shadow-indigo-500/20"
-                    : "border-slate-800 opacity-60 hover:opacity-100"
-                }`}
+                onClick={() => onSetPrimary(activeIndex)}
+                className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all"
               >
-                <img
-                  src={photoUrl}
-                  alt={`Miniatura ${idx + 1}`}
-                  className="w-full h-full object-cover"
-                />
-                {isItemPrimary && (
-                  <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-amber-400 shadow border border-slate-950" />
-                )}
+                <Star className="w-3.5 h-3.5 fill-white" />
+                <span>Definir como Imagen principal</span>
               </button>
-            );
-          })}
+            ) : (
+              <div className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400 text-xs font-semibold flex items-center justify-center gap-1.5 pointer-events-none">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span>Imagen principal</span>
+              </div>
+            )}
 
-          {/* Botón para añadir foto individual (1 a la vez con conteo de cupos restantes) */}
-          {remainingSlots > 0 && (
             <button
               type="button"
-              onClick={onTriggerAdd}
-              className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 border-dashed border-indigo-500/60 hover:border-indigo-400 active:scale-95 text-indigo-400 hover:text-white flex flex-col items-center justify-center flex-shrink-0 transition-all bg-indigo-500/10 hover:bg-indigo-500/20"
-              title={`Añadir foto (Quedan ${remainingSlots} de 5)`}
+              onClick={() => onTriggerReplace(activeIndex)}
+              className="min-h-[44px] py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all border border-slate-700/60"
             >
-              <Plus className="w-4 h-4" />
-              <span className="text-[9px] font-bold">+{remainingSlots}</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Cambiar</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={() => onDelete(activeIndex)}
+              className="min-h-[44px] py-2.5 px-3.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-500/30"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar</span>
+            </button>
+          </div>
+
+          {/* Carrete horizontal de miniaturas táctiles */}
+          <div
+            ref={thumbnailContainerRef}
+            className="flex items-center justify-center gap-2 overflow-x-auto py-1 no-scrollbar"
+          >
+            {photos.map((photoUrl, idx) => {
+              const isActive = idx === activeIndex;
+              const isItemPrimary = idx === 0;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => onSelectIndex(idx)}
+                  className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden flex-shrink-0 transition-all border ${
+                    isActive
+                      ? "ring-2 ring-indigo-500 border-indigo-400 scale-105 shadow-md shadow-indigo-500/20"
+                      : "border-slate-800 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <img
+                    src={photoUrl}
+                    alt={`Miniatura ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {isItemPrimary && (
+                    <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-amber-400 shadow border border-slate-950" />
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Botón para añadir foto individual (1 a la vez con conteo de cupos restantes) */}
+            {remainingSlots > 0 && (
+              <button
+                type="button"
+                onClick={onTriggerAdd}
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-2 border-dashed border-indigo-500/60 hover:border-indigo-400 active:scale-95 text-indigo-400 hover:text-white flex flex-col items-center justify-center flex-shrink-0 transition-all bg-indigo-500/10 hover:bg-indigo-500/20"
+                title={`Añadir foto (Quedan ${remainingSlots} de 5)`}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-[9px] font-bold">+{remainingSlots}</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>,
     document.body
   );

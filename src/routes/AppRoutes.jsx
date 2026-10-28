@@ -15,8 +15,12 @@ import ExplorePage from "../pages/mobile/ExplorePage";
 import PublishPage from "../pages/mobile/PublishPage";
 import ProfilePage from "../pages/mobile/ProfilePage";
 import ProductDetailPage from "../pages/mobile/ProductDetailPage";
+import ManageProductPage from "../pages/mobile/ManageProductPage";
 import SellerProfilePage from "../pages/mobile/SellerProfilePage";
 import LoginPage from "../pages/mobile/LoginPage";
+import MessagesPage from "../pages/mobile/MessagesPage";
+import ChatDetailPage from "../pages/mobile/ChatDetailPage";
+import BlockedUsersPage from "../pages/mobile/BlockedUsersPage";
 
 // Páginas del Panel Webmaster (Admin)
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -54,9 +58,49 @@ export const AppRoutes = () => {
         {/* Detalle del producto */}
         <Route path="/product/:id" element={<ProductDetailPage />} />
 
+        {/* Gestión de anuncio por su propietario */}
+        <Route
+          path="/manage-product/:id"
+          element={
+            <ProtectedRoute requireAdmin={false}>
+              <ManageProductPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Perfil público del vendedor */}
         <Route path="/seller/:sellerId" element={<SellerProfilePage />} />
         
+        {/* Mensajería interna: Bandeja de entrada */}
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute requireAdmin={false}>
+              <MessagesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Mensajería interna: Conversación individual */}
+        <Route
+          path="/messages/:conversationId"
+          element={
+            <ProtectedRoute requireAdmin={false}>
+              <ChatDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Gestión de usuarios bloqueados */}
+        <Route
+          path="/blocked-users"
+          element={
+            <ProtectedRoute requireAdmin={false}>
+              <BlockedUsersPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Autenticación / Login */}
         <Route path="/login" element={<LoginPage />} />
       </Route>

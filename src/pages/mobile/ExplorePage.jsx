@@ -1,6 +1,6 @@
 // Página de Exploración y Categorías
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Laptop,
   Car,
@@ -8,18 +8,26 @@ import {
   Briefcase,
   Armchair,
   Sparkles,
-  TrendingUp,
-  Search,
-  ArrowRight
+  TrendingUp
 } from "lucide-react";
 import { MOCK_CATEGORIES } from "../../services/mockData";
 import { getStoredProducts } from "../../services/productsService";
 import ProductCard from "../../components/mobile/ProductCard";
 
 export const ExplorePage = () => {
+  const navigate = useNavigate();
   const [selectedCat, setSelectedCat] = useState(null);
-  const [searchFilter, setSearchFilter] = useState("");
   const allProducts = getStoredProducts();
+
+  // Interceptar el gesto táctil del sistema hacia atrás para retornar siempre al Feed principal
+  useEffect(() => {
+    const handlePopState = () => {
+      navigate("/", { replace: true });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [navigate]);
 
   const iconMap = {
     Laptop: Laptop,

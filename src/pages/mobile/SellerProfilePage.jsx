@@ -1,17 +1,15 @@
 // Vista completa de perfil público y publicaciones de un vendedor en AnunciosSV
-import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   User,
   CheckCircle2,
   Star,
   MapPin,
-  Calendar,
   MessageCircle,
   Package,
   Sparkles,
   Heart,
-  ChevronLeft,
   ExternalLink,
   ShieldCheck,
   Share2
@@ -22,16 +20,59 @@ import {
   getProductsBySellerId,
   isProductFavorite,
   toggleFavoriteProduct,
+  formatProductPrice,
   FAVORITES_EVENT
 } from "../../services/productsService";
+import { PROFILE_UPDATED_EVENT } from "../../services/userProfileService";
+import { getOrCreateConversation } from "../../services/chatService";
 
 export const SellerProfilePage = () => {
   const { sellerId } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { currentUser, requireAuth } = useAuth();
+
+  // Control de retorno y procedencia desde el chat
+  const isFromChat = Boolean(
+    location.state?.fromChat ||
+    searchParams.get("from") === "chat" ||
+    searchParams.get("fromChat") === "true"
+  );
+  const chatId = location.state?.chatId || searchParams.get("chatId") || "";
+  const chatPath = location.state?.chatPath || (chatId ? `/messages/${chatId}` : "/messages");
 
   const [seller, setSeller] = useState(() => getSellerInfo(sellerId));
   const [sellerProducts, setSellerProducts] = useState(() => getProductsBySellerId(sellerId));
+
+  // Referencias para detección de gesto táctil de retroceso (Swipe back)
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchStartTimeRef = useRef(0);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchStartTimeRef.current = Date.now();
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const diffX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const diffY = e.changedTouches[0].clientY - touchStartYRef.current;
+    const elapsed = Date.now() - touchStartTimeRef.current;
+
+    // Gesto de swipe hacia la derecha desde el margen izquierdo (retroceso táctil fluido)
+    if (diffX > 65 && Math.abs(diffY) < 55 && elapsed < 600 && touchStartXRef.current < 120) {
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate("/", { replace: true });
+      }
+    }
+  };
 
   // Asegurar que siempre se muestre la parte superior al ingresar al perfil
   useEffect(() => {
@@ -52,14 +93,34 @@ export const SellerProfilePage = () => {
 
     window.addEventListener("anunciossv_products_updated", handleUpdate);
     window.addEventListener(FAVORITES_EVENT, handleUpdate);
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
     return () => {
       window.removeEventListener("anunciossv_products_updated", handleUpdate);
       window.removeEventListener(FAVORITES_EVENT, handleUpdate);
+      window.removeEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
     };
   }, [sellerId]);
 
   const handleSendMessage = () => {
-    alert(`La mensajería interna con ${seller?.name || "el vendedor"} estará disponible próximamente en AnunciosSV.`);
+    // Requerir inicio de sesión para contactar al vendedor
+    requireAuth(
+      () => {
+        try {
+          const conv = getOrCreateConversation({
+            currentUser,
+            recipient: seller
+          });
+          navigate(`/messages/${conv.id}`);
+        } catch (err) {
+          alert("Error al iniciar la conversación: " + err.message);
+        }
+      },
+      {
+        actionType: "message",
+        title: "¿Contactar al vendedor?",
+        message: `Inicia sesión para comunicarte directamente con ${seller?.name || "el vendedor"} y gestionar tus mensajes.`
+      }
+    );
   };
 
   const handleShare = () => {
@@ -86,7 +147,7 @@ export const SellerProfilePage = () => {
         <h2 className="text-lg font-bold text-white">Vendedor no encontrado</h2>
         <p className="text-xs text-slate-400">El perfil que buscas no existe o ya no tiene publicaciones activas.</p>
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/", { replace: true })}
           className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold"
         >
           Volver al Inicio
@@ -96,7 +157,11 @@ export const SellerProfilePage = () => {
   }
 
   return (
-    <div className="space-y-4 px-4 py-3 pb-8 animate-fade-in">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="space-y-4 px-4 py-3 pb-8 animate-fade-in"
+    >
       {/* 1. Tarjeta de Cabecera del Vendedor */}
       <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="flex items-start justify-between gap-3 relative z-10">
@@ -175,15 +240,17 @@ export const SellerProfilePage = () => {
         </div>
       </div>
 
-      {/* 2. Botón de Acción Principal: Enviar mensaje al vendedor */}
-      <button
-        type="button"
-        onClick={handleSendMessage}
-        className="w-full min-h-[50px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
-      >
-        <MessageCircle className="w-5 h-5" />
-        <span>Enviar mensaje a {seller.name}</span>
-      </button>
+      {/* 2. Botón de Acción Principal: Enviar mensaje al vendedor (Oculto si se mira desde el chat) */}
+      {!isFromChat && (
+        <button
+          type="button"
+          onClick={handleSendMessage}
+          className="w-full min-h-[50px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+        >
+          <MessageCircle className="w-5 h-5" />
+          <span>Enviar mensaje a {seller.name}</span>
+        </button>
+      )}
 
       {/* 3. Lista de Publicaciones del Vendedor */}
       <div className="space-y-3 pt-1">
@@ -198,6 +265,15 @@ export const SellerProfilePage = () => {
           <div className="space-y-2.5">
             {sellerProducts.map((prod) => {
               const isFav = isProductFavorite(prod.id, currentUser);
+              const productDetailLink = `/product/${prod.id}?from=seller${isFromChat ? "&fromChat=true" : ""}${chatId ? `&chatId=${encodeURIComponent(chatId)}` : ""}&sellerId=${encodeURIComponent(sellerId)}`;
+              const productDetailState = {
+                fromSeller: true,
+                sellerPath: location.pathname + location.search,
+                sellerId: sellerId,
+                fromChat: isFromChat,
+                chatPath: chatPath,
+                chatId: chatId
+              };
 
               return (
                 <div
@@ -205,7 +281,8 @@ export const SellerProfilePage = () => {
                   className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 shadow-sm hover:border-slate-700 transition-all"
                 >
                   <Link
-                    to={`/product/${prod.id}`}
+                    to={productDetailLink}
+                    state={productDetailState}
                     className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-800 flex-shrink-0 block"
                   >
                     <img
@@ -221,19 +298,32 @@ export const SellerProfilePage = () => {
                   </Link>
 
                   <div className="flex-1 min-w-0">
-                    <Link to={`/product/${prod.id}`} className="block">
+                    <Link to={productDetailLink} state={productDetailState} className="block">
                       <h3 className="text-xs font-bold text-white truncate hover:text-indigo-300 transition-colors">
                         {prod.title}
                       </h3>
                     </Link>
 
-                    <div className="text-xs font-semibold text-indigo-400 mt-0.5 flex items-center gap-1.5">
-                      {prod.isFree ? (
-                        <span className="text-emerald-400 font-bold">GRATIS</span>
-                      ) : (
-                        <span>${Number(prod.price).toFixed(2)} {prod.currency || "USD"}</span>
-                      )}
-                      {prod.isNegotiable && (
+                    <div className="text-xs font-semibold text-indigo-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      {(() => {
+                        const priceInfo = formatProductPrice(prod);
+                        if (priceInfo.isContact) {
+                          return (
+                            <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/20 px-1.5 py-0.2 rounded border border-indigo-500/30">
+                              💬 A consultar
+                            </span>
+                          );
+                        }
+                        if (priceInfo.isFree) {
+                          return <span className="text-emerald-400 font-bold">GRATIS</span>;
+                        }
+                        return (
+                          <span>
+                            {priceInfo.text} {priceInfo.currency}{priceInfo.periodSuffix}
+                          </span>
+                        );
+                      })()}
+                      {prod.isNegotiable && !prod.isFree && !prod.isContactPrice && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
                           Negociable
                         </span>
@@ -249,7 +339,18 @@ export const SellerProfilePage = () => {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       type="button"
-                      onClick={() => toggleFavoriteProduct(prod.id, currentUser)}
+                      onClick={() => {
+                        requireAuth(
+                          () => {
+                            toggleFavoriteProduct(prod.id, currentUser);
+                          },
+                          {
+                            actionType: "like",
+                            title: "¿Guardar en tus favoritos?",
+                            message: "Inicia sesión para poder guardar este anuncio en tus favoritos y consultarlo cuando quieras."
+                          }
+                        );
+                      }}
                       className={`p-2 rounded-xl transition-all active:scale-95 ${
                         isFav
                           ? "bg-rose-500 text-white shadow-sm"
@@ -262,7 +363,8 @@ export const SellerProfilePage = () => {
                     </button>
 
                     <Link
-                      to={`/product/${prod.id}`}
+                      to={productDetailLink}
+                      state={productDetailState}
                       className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                       title="Ver anuncio"
                     >
@@ -297,3 +399,4 @@ export const SellerProfilePage = () => {
 };
 
 export default SellerProfilePage;
+

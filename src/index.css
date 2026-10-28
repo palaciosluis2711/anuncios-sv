@@ -6,6 +6,11 @@
   * {
     -webkit-tap-highlight-color: transparent;
   }
+
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
   
   body {
     @apply antialiased text-slate-100 bg-slate-950 min-h-screen font-sans;
@@ -105,5 +110,37 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Animación de deslizamiento suave hacia arriba para menús y modales inferiores (Bottom Sheets) */
+  .animate-slide-up-sheet {
+    animation: slideUpSheet 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Animación de deslizamiento suave hacia abajo para cierre de menús inferiores */
+  .animate-slide-down-sheet {
+    animation: slideDownSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes slideUpSheet {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDownSheet {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0.8;
   }
 }

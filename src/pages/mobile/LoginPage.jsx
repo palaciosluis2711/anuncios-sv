@@ -8,6 +8,7 @@ import {
   Mail,
   Lock,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   UserPlus,
   LogIn,
@@ -130,11 +131,31 @@ export const LoginPage = () => {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/", { replace: true });
+    }
+  };
 
   return (
-    <div className="px-4 py-6 max-w-sm mx-auto space-y-5 animate-fade-in">
+    <div className="px-4 py-4 max-w-sm mx-auto space-y-4 animate-fade-in">
+      {/* Botón de retorno a pantalla anterior o feed principal */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label="Regresar"
+          className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition-all shadow-sm"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="w-10" aria-hidden="true" />
+      </div>
+
       {/* Título de la pantalla */}
-      <div className="text-center space-y-1 pt-2">
+      <div className="text-center space-y-1">
         <h1 className="text-2xl font-black text-white tracking-tight">
           {mode === "login" ? "Iniciar sesión" : "Crear nueva cuenta"}
         </h1>

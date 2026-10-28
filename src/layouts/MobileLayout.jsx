@@ -1,6 +1,6 @@
 // Layout principal Mobile-First para la aplicación de clasificados y red social
 import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import MobileHeader from "../components/mobile/MobileHeader";
 import BottomNav from "../components/mobile/BottomNav";
 import RoleSwitcherBanner from "../components/common/RoleSwitcherBanner";
@@ -9,9 +9,16 @@ import { Smartphone, Monitor } from "lucide-react";
 export const MobileLayout = () => {
   // Permite simular vista móvil enmarcada o expandida en pantallas desktop
   const [isDeviceFrame, setIsDeviceFrame] = useState(true);
+  const location = useLocation();
+
+  const isChatDetail = location.pathname.startsWith("/messages/");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start relative">
+    <div
+      className={`${
+        isChatDetail ? "h-[100dvh] max-h-[100dvh] overflow-hidden" : "min-h-screen"
+      } bg-slate-950 text-slate-100 flex flex-col items-center justify-start relative`}
+    >
       {/* Botón flotante superior para desarrollador: alternar simulación de marco móvil en desktop */}
       <div className="hidden lg:flex fixed top-3 left-4 z-50 items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-800 text-xs text-slate-400">
         <span className="font-medium text-slate-300">Vista previa:</span>
@@ -39,7 +46,9 @@ export const MobileLayout = () => {
 
       {/* Contenedor principal de la aplicación */}
       <div
-        className={`w-full transition-all duration-300 min-h-screen flex flex-col relative ${
+        className={`w-full transition-all duration-300 ${
+          isChatDetail ? "h-[100dvh] max-h-[100dvh] overflow-hidden" : "min-h-screen"
+        } flex flex-col relative ${
           isDeviceFrame
             ? "max-w-md mx-auto bg-slate-950 sm:border-x sm:border-slate-800 sm:shadow-2xl sm:my-0"
             : "max-w-4xl mx-auto bg-slate-950"
@@ -49,7 +58,13 @@ export const MobileLayout = () => {
         <MobileHeader />
 
         {/* Contenido dinámico de las páginas */}
-        <main className="flex-1 pb-24 animate-fade-in">
+        <main
+          className={`flex-1 ${
+            isChatDetail
+              ? "pb-0 h-full overflow-hidden flex flex-col"
+              : "pb-24"
+          } animate-fade-in`}
+        >
           <Outlet />
         </main>
 

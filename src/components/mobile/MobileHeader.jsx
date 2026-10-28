@@ -1,13 +1,16 @@
 // Encabezado superior adaptativo para la experiencia móvil
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingBag, Bell, Shield, ArrowLeft, Share2 } from "lucide-react";
+import { ShoppingBag, Bell, Shield, ArrowLeft, Share2, MessageCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { getTotalUnreadCount, CHAT_EVENT } from "../../services/chatService";
 
 export const MobileHeader = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, currentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(() => getTotalUnreadCount(currentUser));
 
   // Control de visibilidad del header al desplazarse en el feed principal
   const [showHeader, setShowHeader] = useState(true);
@@ -19,13 +22,29 @@ export const MobileHeader = () => {
   const isPublishPage = pathname === "/publish";
   const isProductDetailPage = pathname.startsWith("/product/");
   const isSellerProfilePage = pathname.startsWith("/seller/");
+  const isManageProductPage = pathname.startsWith("/manage-product/");
+  const isMessagesPage = pathname === "/messages";
+  const isChatDetailPage = pathname.startsWith("/messages/");
+  const isBlockedUsersPage = pathname === "/blocked-users";
 
-  // Función segura para retornar atrás
+  // Suscripción al contador global de mensajes no leídos
+  useEffect(() => {
+    setUnreadMessagesCount(getTotalUnreadCount(currentUser));
+
+    const handleChatUpdate = () => {
+      setUnreadMessagesCount(getTotalUnreadCount(currentUser));
+    };
+
+    window.addEventListener(CHAT_EVENT, handleChatUpdate);
+    return () => window.removeEventListener(CHAT_EVENT, handleChatUpdate);
+  }, [currentUser]);
+
+  // Función segura para retornar atrás con el MISMO comportamiento que el gesto táctil nativo del celular
   const handleBack = () => {
-    if (window.history.state && window.history.state.idx > 0) {
+    if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate("/");
+      navigate("/", { replace: true });
     }
   };
 
@@ -67,8 +86,8 @@ export const MobileHeader = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHome]);
 
-  // 1. En el registro e inicio de sesión: NO se muestra el header
-  if (isLoginPage) {
+  // 1. En registro, login, Centro de Control, Bandeja, Chat individual o Usuarios Bloqueados: NO se muestra el header global
+  if (isLoginPage || isManageProductPage || isMessagesPage || isChatDetailPage || isBlockedUsersPage) {
     return null;
   }
 
@@ -78,17 +97,14 @@ export const MobileHeader = () => {
     const isPromoteStep = searchParams.get("step") === "promote";
 
     const handlePublishBack = () => {
-      if (isPromoteStep) {
-        navigate("/publish");
-      } else {
-        handleBack();
-      }
+      // Notificar a PublishPage para que controle el retorno unificado tanto en Paso 2 como en Paso 1
+      window.dispatchEvent(new CustomEvent("anunciossv_publish_back_requested"));
     };
 
     return (
       <header className="sticky top-0 z-50 bg-slate-950 border-b border-slate-800/90 px-4 py-2.5 shadow-md">
         <div className="max-w-md mx-auto flex items-center justify-between gap-2">
-          {/* Izquierda: Botón de retorno y cápsula Paso 2 de 2 */}
+          {/* Izquierda: Botón de retorno */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -99,12 +115,6 @@ export const MobileHeader = () => {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-
-            {isPromoteStep && (
-              <span className="text-[10px] sm:text-[11px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full whitespace-nowrap">
-                Paso 2 de 2
-              </span>
-            )}
           </div>
 
           {/* Centro: Título dinámico (Promocionar publicación vs Publicar Anuncio) */}
@@ -113,7 +123,7 @@ export const MobileHeader = () => {
           </h1>
 
           {/* Derecha: Espaciador para centrar el título */}
-          <div className={isPromoteStep ? "w-10 sm:w-20 flex-shrink-0" : "w-10 flex-shrink-0"} />
+          <div className="w-10 flex-shrink-0" />
         </div>
       </header>
     );
@@ -138,15 +148,19 @@ export const MobileHeader = () => {
 
           <span className="text-sm font-bold text-white tracking-tight">{pageTitle}</span>
 
-          <button
-            type="button"
-            onClick={handleShare}
-            className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all shadow-sm"
-            aria-label="Compartir"
-            title="Compartir"
-          >
-            <Share2 className="w-4.5 h-4.5" />
-          </button>
+          {isSellerProfilePage ? (
+            <div className="w-10 flex-shrink-0" />
+          ) : (
+            <button
+              type="button"
+              onClick={handleShare}
+              className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all shadow-sm"
+              aria-label="Compartir"
+              title="Compartir"
+            >
+              <Share2 className="w-4.5 h-4.5" />
+            </button>
+          )}
         </div>
       </header>
     );
@@ -186,6 +200,21 @@ export const MobileHeader = () => {
               <span>Admin</span>
             </Link>
           )}
+
+          {/* Botón de Mensajes directos con contador reactivo */}
+          <Link
+            to="/messages"
+            aria-label="Mensajes"
+            title="Bandeja de mensajes"
+            className="relative p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" />
+            {unreadMessagesCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-pink-500 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-slate-950 animate-fade-in shadow-sm">
+                {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+              </span>
+            )}
+          </Link>
 
           {/* Notificaciones */}
           <button

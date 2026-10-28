@@ -1,11 +1,17 @@
 // Barra de navegación inferior fija para la experiencia Mobile-First
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Home, Compass, PlusCircle, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 export const BottomNav = () => {
   const { currentUser } = useAuth();
+  const location = useLocation();
+
+  // En la vista de chat individual (/messages/:id), se oculta el BottomNav para permitir que el campo de texto sea fijo
+  if (location.pathname.startsWith("/messages/")) {
+    return null;
+  }
 
   const navItems = [
     {
@@ -39,11 +45,25 @@ export const BottomNav = () => {
         {navItems.map((item) => {
           const Icon = item.icon;
 
+          const handleTabClick = (e) => {
+            if (location.pathname === "/publish" && item.to !== "/publish") {
+              const event = new CustomEvent("anunciossv_publish_leave_requested", {
+                detail: { targetPath: item.to },
+                cancelable: true
+              });
+              window.dispatchEvent(event);
+              if (event.defaultPrevented) {
+                e.preventDefault();
+              }
+            }
+          };
+
           if (item.isSpecial) {
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={handleTabClick}
                 className={({ isActive }) => `
                   relative -top-5 flex flex-col items-center group
                 `}
@@ -75,6 +95,7 @@ export const BottomNav = () => {
               key={item.to}
               to={item.to}
               end={item.exact}
+              onClick={handleTabClick}
               className={({ isActive }) => `
                 flex flex-col items-center justify-center w-16 py-1 transition-all duration-200 relative
                 ${isActive ? "text-indigo-400 font-semibold" : "text-slate-400 hover:text-slate-200"}

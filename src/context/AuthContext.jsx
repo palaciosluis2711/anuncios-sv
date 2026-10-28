@@ -1,6 +1,7 @@
 // Contexto global de autenticación: Registro con Nombre de Usuario, Correo y Contraseña
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { isFirebaseConfigured, auth, db } from "../services/firebase";
+import { AuthRequiredModal } from "../components/common/AuthRequiredModal";
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -8,11 +9,27 @@ import {
   fetchSignInMethodsForEmail,
   signOut as fbSignOut,
   updateProfile,
+  updateEmail,
+  updatePassword,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs
+} from "firebase/firestore";
 import { MOCK_USERS } from "../services/mockData";
+import { savePublicProfile, getPublicProfile } from "../services/userProfileService";
+import { syncUserAvatarInProducts } from "../services/productsService";
+import { syncUserAvatarInChats } from "../services/chatService";
 
 const AuthContext = createContext(null);
 
@@ -26,15 +43,47 @@ export const AuthProvider = ({ children }) => {
         console.error("Error al parsear usuario de localStorage:", e);
       }
     }
-    return {
-      ...MOCK_USERS[1],
-      username: "carlos_m",
-      name: "@carlos_m"
-    };
+    // Si no hay sesión activa guardada, arrancar en modo invitado (null)
+    return null;
   });
 
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
+
+  // Control interactivo del modal para solicitar inicio de sesión en acciones restringidas
+  const [authModalConfig, setAuthModalConfig] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    actionType: "action"
+  });
+
+  const openAuthPrompt = useCallback(({ title, message, actionType = "action" } = {}) => {
+    setAuthModalConfig({
+      isOpen: true,
+      title: title || "",
+      message: message || "",
+      actionType
+    });
+  }, []);
+
+  const closeAuthPrompt = useCallback(() => {
+    setAuthModalConfig((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const requireAuth = useCallback(
+    (callback, promptOptions = {}) => {
+      if (currentUser) {
+        if (typeof callback === "function") {
+          return callback();
+        }
+        return true;
+      }
+      openAuthPrompt(promptOptions);
+      return false;
+    },
+    [currentUser, openAuthPrompt]
+  );
 
   // Sincronizar usuario actual con localStorage
   useEffect(() => {
@@ -60,15 +109,42 @@ export const AuthProvider = ({ children }) => {
             setCurrentUser({
               id: fbUser.uid,
               username: data.username || fbUser.email.split("@")[0],
-              name: data.name || `@${data.username || fbUser.email.split("@")[0]}`,
+              name: data.displayName || data.name || `@${data.username || fbUser.email.split("@")[0]}`,
+              displayName: data.displayName || "",
+              phone: data.phone || "",
               email: fbUser.email,
               role: data.role || "user",
               avatar: data.avatar || fbUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
               status: data.status || "activo"
             });
+          } else {
+            setCurrentUser({
+              id: fbUser.uid,
+              username: fbUser.email.split("@")[0],
+              name: fbUser.displayName || `@${fbUser.email.split("@")[0]}`,
+              displayName: fbUser.displayName || "",
+              phone: fbUser.phoneNumber || "",
+              email: fbUser.email,
+              role: "user",
+              avatar: fbUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+              status: "activo"
+            });
           }
         } catch (err) {
           console.warn("Aviso al consultar Firestore para perfil:", err.message);
+        }
+      } else {
+        // Si no hay sesión en Firebase Auth, comprobar si hay usuario de prueba en localStorage
+        const savedUser = localStorage.getItem("mercadosocial_user");
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            // Si el usuario guardado no era explícitamente demo, limpiar para no restaurar sesión
+            if (parsed && !parsed.isDemoUser) {
+              setCurrentUser(null);
+              localStorage.removeItem("mercadosocial_user");
+            }
+          } catch (e) {}
         }
       }
     });
@@ -416,22 +492,45 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 6. Alternar roles de prueba
+  // 6. Alternar roles de prueba desde el simulador
   const switchDemoRole = (targetRole) => {
     setLoading(true);
     setTimeout(() => {
       if (targetRole === "admin") {
-        setCurrentUser({ ...MOCK_USERS[0], username: "admin", name: "@admin" });
+        const cachedAdmin = getPublicProfile("usr-admin");
+        const demoAdmin = {
+          ...MOCK_USERS[0],
+          username: "admin",
+          name: cachedAdmin?.displayName || cachedAdmin?.name || "@admin",
+          displayName: cachedAdmin?.displayName || "@admin",
+          avatar: cachedAdmin?.avatar || MOCK_USERS[0].avatar,
+          phone: cachedAdmin?.phone || MOCK_USERS[0].phone || "",
+          isDemoUser: true
+        };
+        setCurrentUser(demoAdmin);
+        localStorage.setItem("mercadosocial_user", JSON.stringify(demoAdmin));
       } else if (targetRole === "user") {
-        setCurrentUser({ ...MOCK_USERS[1], username: "carlos_m", name: "@carlos_m" });
+        const cachedUser = getPublicProfile("usr-01");
+        const demoUser = {
+          ...MOCK_USERS[1],
+          username: "carlos_m",
+          name: cachedUser?.displayName || cachedUser?.name || "@carlos_m",
+          displayName: cachedUser?.displayName || "@carlos_m",
+          avatar: cachedUser?.avatar || MOCK_USERS[1].avatar,
+          phone: cachedUser?.phone || MOCK_USERS[1].phone || "",
+          isDemoUser: true
+        };
+        setCurrentUser(demoUser);
+        localStorage.setItem("mercadosocial_user", JSON.stringify(demoUser));
       } else {
         setCurrentUser(null);
+        localStorage.removeItem("mercadosocial_user");
       }
       setLoading(false);
     }, 100);
   };
 
-  // 7. Cerrar sesión
+  // 7. Cerrar sesión definitivamente (se mantiene cerrada incluso al recargar)
   const logout = async () => {
     if (isFirebaseConfigured) {
       try {
@@ -440,7 +539,189 @@ export const AuthProvider = ({ children }) => {
         console.error("Error al cerrar sesión:", err);
       }
     }
+    localStorage.removeItem("mercadosocial_user");
     setCurrentUser(null);
+  };
+
+  // 8. Actualizar perfil del usuario (nombre de pila, teléfono y foto de perfil)
+  const updateUserProfile = async ({ displayName, phone, avatar }) => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      const trimmedDisplayName = displayName !== undefined ? displayName.trim() : (currentUser?.displayName || "");
+      const trimmedPhone = phone !== undefined ? phone.trim() : (currentUser?.phone || "");
+      const newAvatar = avatar !== undefined ? avatar : (currentUser?.avatar || "");
+
+      const updatedUser = {
+        ...currentUser,
+        displayName: trimmedDisplayName,
+        name: trimmedDisplayName || `@${currentUser?.username || "usuario"}`,
+        phone: trimmedPhone,
+        avatar: newAvatar
+      };
+
+      // 1. Guardar en el directorio central de perfiles públicos (indexado por ID y username)
+      savePublicProfile(updatedUser);
+
+      // 2. Propagar y actualizar inmediatamente todas las publicaciones del usuario
+      await syncUserAvatarInProducts(updatedUser, newAvatar, trimmedDisplayName);
+
+      // 3. Propagar y actualizar inmediatamente todas las conversaciones y mensajes
+      await syncUserAvatarInChats(updatedUser, newAvatar, trimmedDisplayName);
+
+      if (isFirebaseConfigured && auth.currentUser) {
+        try {
+          await updateProfile(auth.currentUser, {
+            displayName: trimmedDisplayName || auth.currentUser.displayName,
+            photoURL: newAvatar || auth.currentUser.photoURL
+          });
+        } catch (e) {
+          console.warn("Aviso al actualizar profile en Auth:", e);
+        }
+
+        try {
+          const userDocRef = doc(db, "users", auth.currentUser.uid);
+          await setDoc(userDocRef, {
+            displayName: trimmedDisplayName,
+            name: trimmedDisplayName || `@${currentUser?.username || "usuario"}`,
+            phone: trimmedPhone,
+            avatar: newAvatar,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Aviso al actualizar en Firestore:", e);
+        }
+      }
+
+      setCurrentUser(updatedUser);
+      return updatedUser;
+    } catch (err) {
+      console.error("Error al actualizar perfil:", err);
+      const humanMessage = getFirebaseErrorMessage(err.code, err.message);
+      setAuthError(humanMessage);
+      throw new Error(humanMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 9. Actualizar correo electrónico
+  const updateUserEmail = async (newEmail) => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      const cleanEmail = newEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        throw new Error("Por favor ingresa un correo electrónico válido.");
+      }
+
+      if (isFirebaseConfigured && auth.currentUser) {
+        await updateEmail(auth.currentUser, cleanEmail);
+
+        const userDocRef = doc(db, "users", auth.currentUser.uid);
+        await setDoc(userDocRef, {
+          email: cleanEmail,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        if (currentUser?.username) {
+          try {
+            const usernameDocRef = doc(db, "usernames", currentUser.username.toLowerCase());
+            await setDoc(usernameDocRef, { email: cleanEmail }, { merge: true });
+          } catch (e) {
+            console.warn("Aviso al actualizar email en usernames:", e);
+          }
+        }
+      }
+
+      const updatedUser = { ...currentUser, email: cleanEmail };
+      setCurrentUser(updatedUser);
+      return updatedUser;
+    } catch (err) {
+      console.error("Error al actualizar correo:", err);
+      let humanMessage = getFirebaseErrorMessage(err.code, err.message);
+      if (err.code === "auth/requires-recent-login") {
+        humanMessage = "Por seguridad, debes cerrar sesión y volver a entrar antes de cambiar tu correo.";
+      }
+      setAuthError(humanMessage);
+      throw new Error(humanMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 10. Actualizar contraseña
+  const updateUserPassword = async (newPassword) => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error("La contraseña debe tener al menos 6 caracteres.");
+      }
+
+      if (isFirebaseConfigured && auth.currentUser) {
+        await updatePassword(auth.currentUser, newPassword);
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Error al actualizar contraseña:", err);
+      let humanMessage = getFirebaseErrorMessage(err.code, err.message);
+      if (err.code === "auth/requires-recent-login") {
+        humanMessage = "Por seguridad, debes cerrar sesión y volver a entrar antes de cambiar tu contraseña.";
+      }
+      setAuthError(humanMessage);
+      throw new Error(humanMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 11. Eliminar cuenta permanentemente (Danger Zone)
+  const deleteAccount = async () => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      const uid = currentUser?.id || auth.currentUser?.uid;
+      const username = currentUser?.username;
+
+      if (isFirebaseConfigured) {
+        if (uid) {
+          try {
+            await deleteDoc(doc(db, "users", uid));
+          } catch (e) {
+            console.warn("Aviso al eliminar documento en Firestore:", e);
+          }
+        }
+
+        if (username) {
+          try {
+            await deleteDoc(doc(db, "usernames", username.toLowerCase()));
+          } catch (e) {
+            console.warn("Aviso al liberar username en Firestore:", e);
+          }
+        }
+
+        if (auth.currentUser) {
+          await deleteUser(auth.currentUser);
+        }
+      }
+
+      setCurrentUser(null);
+      localStorage.removeItem("mercadosocial_user");
+      return true;
+    } catch (err) {
+      console.error("Error al eliminar cuenta:", err);
+      let humanMessage = getFirebaseErrorMessage(err.code, err.message);
+      if (err.code === "auth/requires-recent-login") {
+        humanMessage = "Por razones de seguridad, vuelve a iniciar sesión e intenta eliminar la cuenta inmediatamente.";
+      }
+      setAuthError(humanMessage);
+      throw new Error(humanMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getFirebaseErrorMessage = (code, fallback) => {
@@ -477,10 +758,28 @@ export const AuthProvider = ({ children }) => {
     loginUser,
     loginWithGoogle,
     switchDemoRole,
-    logout
+    logout,
+    updateUserProfile,
+    updateUserEmail,
+    updateUserPassword,
+    deleteAccount,
+    openAuthPrompt,
+    closeAuthPrompt,
+    requireAuth
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <AuthRequiredModal
+        isOpen={authModalConfig.isOpen}
+        onClose={closeAuthPrompt}
+        title={authModalConfig.title}
+        message={authModalConfig.message}
+        actionType={authModalConfig.actionType}
+      />
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

@@ -113,7 +113,7 @@ export const AdminDashboard = () => {
                   <div>
                     <h4 className="text-xs font-bold text-white line-clamp-1">{prod.title}</h4>
                     <div className="text-xs font-medium text-indigo-400 mt-0.5">
-                      ${prod.price} {prod.currency} · <span className="text-slate-400">{prod.categoryName}</span>
+                      ${Number(prod.price || 0).toFixed(2)} {prod.currency || "USD"} · <span className="text-slate-400">{prod.categoryName}</span>
                     </div>
                     <div className="text-[10px] text-slate-500 mt-1">
                       Por: {prod.seller.name} · {prod.createdAt}
