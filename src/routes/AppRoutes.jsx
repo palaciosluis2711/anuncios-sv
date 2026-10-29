@@ -21,6 +21,9 @@ import LoginPage from "../pages/mobile/LoginPage";
 import MessagesPage from "../pages/mobile/MessagesPage";
 import ChatDetailPage from "../pages/mobile/ChatDetailPage";
 import BlockedUsersPage from "../pages/mobile/BlockedUsersPage";
+import PromoteAdPage from "../pages/mobile/PromoteAdPage";
+import PaymentReturnPage from "../pages/mobile/PaymentReturnPage";
+import PagaditoSandboxPage from "../pages/mobile/PagaditoSandboxPage";
 
 // Páginas del Panel Webmaster (Admin)
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -57,6 +60,15 @@ export const AppRoutes = () => {
         
         {/* Detalle del producto */}
         <Route path="/product/:id" element={<ProductDetailPage />} />
+
+        {/* Destacar anuncio con halo dorado y posicionamiento preferencial */}
+        <Route path="/promote-ad/:id" element={<PromoteAdPage />} />
+
+        {/* Retorno y confirmación de pago con Pagadito */}
+        <Route path="/payment-return" element={<PaymentReturnPage />} />
+
+        {/* Pasarela simulada de Pagadito Sandbox para pruebas de desarrollo */}
+        <Route path="/pagadito-sandbox/:tokenTrans" element={<PagaditoSandboxPage />} />
 
         {/* Gestión de anuncio por su propietario */}
         <Route

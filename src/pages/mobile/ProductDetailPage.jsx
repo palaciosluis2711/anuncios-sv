@@ -966,7 +966,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* 9. Botón de Acción Directa: Gestionar anuncio si es el dueño o Contactar al vendedor si es comprador */}
-        <div className="pt-1">
+        <div className="pt-1 space-y-2">
           {isOwner ? (
             <div className="space-y-2">
               <button
@@ -1039,6 +1039,16 @@ export const ProductDetailPage = () => {
               </div>
             </div>
           )}
+
+          {/* Botón Destacar anuncio (visible en todos los anuncios, tanto de dueño como de terceros) */}
+          <button
+            type="button"
+            onClick={() => navigate(`/promote-ad/${product.id}`, { state: { from: `/product/${product.id}` } })}
+            className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/25 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 hover:border-amber-400/70 text-amber-300 hover:text-amber-200 font-extrabold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4.5 h-4.5 text-amber-400 fill-amber-400" />
+            <span>Destacar anuncio</span>
+          </button>
         </div>
 
         {/* 10. Consejos de Seguridad para Compradores en El Salvador */}

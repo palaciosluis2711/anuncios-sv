@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
               setCurrentUser(null);
               localStorage.removeItem("mercadosocial_user");
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     });
@@ -374,14 +374,14 @@ export const AuthProvider = ({ children }) => {
         const userToSet = found
           ? { ...found, username: input, name: `@${input}` }
           : {
-              id: "usr-" + Date.now(),
-              username: input,
-              name: `@${input}`,
-              email: emailToAuth,
-              role: input.toLowerCase() === "admin" ? "admin" : "user",
-              avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-              status: "activo"
-            };
+            id: "usr-" + Date.now(),
+            username: input,
+            name: `@${input}`,
+            email: emailToAuth,
+            role: input.toLowerCase() === "admin" ? "admin" : "user",
+            avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+            status: "activo"
+          };
         setCurrentUser(userToSet);
         return userToSet;
       }

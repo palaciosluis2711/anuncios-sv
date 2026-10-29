@@ -1,7 +1,7 @@
 // Encabezado superior adaptativo para la experiencia móvil
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingBag, Bell, Shield, ArrowLeft, Share2, MessageCircle } from "lucide-react";
+import { ShoppingBag, Bell, Shield, ArrowLeft, Share2, MessageCircle, Sparkles } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getTotalUnreadCount, CHAT_EVENT } from "../../services/chatService";
 
@@ -26,6 +26,8 @@ export const MobileHeader = () => {
   const isMessagesPage = pathname === "/messages";
   const isChatDetailPage = pathname.startsWith("/messages/");
   const isBlockedUsersPage = pathname === "/blocked-users";
+  const isPromoteAdPage = pathname.startsWith("/promote-ad/");
+  const isPagaditoSandboxPage = pathname.startsWith("/pagadito-sandbox/");
 
   // Suscripción al contador global de mensajes no leídos
   useEffect(() => {
@@ -86,8 +88,8 @@ export const MobileHeader = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHome]);
 
-  // 1. En registro, login, Centro de Control, Bandeja, Chat individual o Usuarios Bloqueados: NO se muestra el header global
-  if (isLoginPage || isManageProductPage || isMessagesPage || isChatDetailPage || isBlockedUsersPage) {
+  // 1. En registro, login, Centro de Control, Bandeja, Chat individual, Usuarios Bloqueados o Pagadito Sandbox: NO se muestra el header global
+  if (isLoginPage || isManageProductPage || isMessagesPage || isChatDetailPage || isBlockedUsersPage || isPagaditoSandboxPage) {
     return null;
   }
 
@@ -166,7 +168,33 @@ export const MobileHeader = () => {
     );
   }
 
-  // 4. Header general (Feed de inicio con auto-ocultamiento al desplazarse, Explorar y Perfil con z-50)
+  // 4. En Destacar Anuncio: cabecera fija con botón de retorno y título "Destacar anuncio"
+  if (isPromoteAdPage) {
+    return (
+      <header className="sticky top-0 z-50 bg-slate-950 border-b border-slate-800/90 px-4 py-2.5 shadow-md">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all shadow-sm"
+            aria-label="Regresar"
+            title="Regresar"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+
+          <span className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
+            <span>Destacar anuncio</span>
+          </span>
+
+          <div className="w-10 flex-shrink-0" />
+        </div>
+      </header>
+    );
+  }
+
+  // 5. Header general (Feed de inicio con auto-ocultamiento al desplazarse, Explorar y Perfil con z-50)
   return (
     <header
       className={`sticky top-0 z-50 bg-slate-950 border-b border-slate-800/90 px-4 py-3 shadow-md transition-all duration-300 ease-out ${

@@ -8,8 +8,8 @@ export const BottomNav = () => {
   const { currentUser } = useAuth();
   const location = useLocation();
 
-  // En la vista de chat individual (/messages/:id), se oculta el BottomNav para permitir que el campo de texto sea fijo
-  if (location.pathname.startsWith("/messages/")) {
+  // En la vista de chat individual o pasarela Pagadito Sandbox, se oculta el BottomNav
+  if (location.pathname.startsWith("/messages/") || location.pathname.startsWith("/pagadito-sandbox/")) {
     return null;
   }
 
