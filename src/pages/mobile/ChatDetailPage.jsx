@@ -19,12 +19,15 @@ import {
   Camera,
   Image as ImageIcon,
   Maximize2,
-  Users
+  Users,
+  User
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
   getConversationById,
   getStoredMessages,
+  subscribeToConversationMessages,
+  subscribeToConversation,
   sendMessage,
   sendImageMessage,
   markConversationAsRead,
@@ -38,11 +41,16 @@ import {
   canDeleteMessagesForAll,
   DELETE_FOR_ALL_LIMIT_MS,
   formatMessageTime,
+  formatLastSeen,
+  resolveConversationPeer,
   CHAT_EVENT,
-  normalizeUserId
+  normalizeUserId,
+  setUserActiveInChat,
+  subscribeToUserOnlineStatus,
+  getUserCandidateKeys
 } from "../../services/chatService";
-import { getPublicProfile, resolveUserAvatar, PROFILE_UPDATED_EVENT } from "../../services/userProfileService";
-import { formatMoney } from "../../services/productsService";
+import { PROFILE_UPDATED_EVENT } from "../../services/userProfileService";
+import { formatMoney, formatProductPrice, getProductById } from "../../services/productsService";
 import { compressImage } from "../../utils/imageCompressor";
 
 // Sugerencias rápidas para agilizar la negociación entre comprador y vendedor
@@ -60,6 +68,7 @@ export const ChatDetailPage = () => {
   const location = useLocation();
 
   const [conversation, setConversation] = useState(() => getConversationById(conversationId));
+  const [isLoadingConv, setIsLoadingConv] = useState(() => !getConversationById(conversationId));
   const [messages, setMessages] = useState(() => getStoredMessages(conversationId));
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
@@ -87,6 +96,11 @@ export const ChatDetailPage = () => {
   const fileInputCameraRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Referencias para detección de gesto táctil de retroceso en el chat (Swipe back)
+  const chatSwipeStartXRef = useRef(0);
+  const chatSwipeStartYRef = useRef(0);
+  const chatSwipeStartTimeRef = useRef(0);
 
   const handleCloseSettings = () => {
     setIsSettingsClosing(true);
@@ -164,34 +178,91 @@ export const ChatDetailPage = () => {
     }, 150);
   };
 
-  // Cargar datos y marcar mensajes como leídos
+  // Cargar datos y sincronizar mensajes en tiempo real desde Firestore y local
   useEffect(() => {
-    const conv = getConversationById(conversationId);
-    setConversation(conv);
-    setMessages(getStoredMessages(conversationId));
-
-    if (conv && currentUser) {
-      markConversationAsRead(conversationId, currentUser);
-    }
-
-    const handleChatUpdate = (e) => {
-      // Actualizar si el evento atañe a esta conversación o a conversaciones en general
-      if (!e.detail?.conversationId || e.detail.conversationId === conversationId) {
-        setConversation(getConversationById(conversationId));
-        setMessages(getStoredMessages(conversationId));
-        if (currentUser) {
+    // Suscripción reactiva en tiempo real a los mensajes de la conversación
+    const unsubscribeMessages = subscribeToConversationMessages(conversationId, (updatedMessages) => {
+      setMessages(updatedMessages);
+      if (currentUser && Array.isArray(updatedMessages)) {
+        const myCandidates = getUserCandidateKeys(currentUser).map((k) => k.toLowerCase());
+        const hasUnread = updatedMessages.some(
+          (m) => !m.read && m.senderId && !myCandidates.includes(String(m.senderId).trim().toLowerCase())
+        );
+        if (hasUnread) {
           markConversationAsRead(conversationId, currentUser);
         }
       }
-    };
+    });
 
-    window.addEventListener(CHAT_EVENT, handleChatUpdate);
-    window.addEventListener(PROFILE_UPDATED_EVENT, handleChatUpdate);
+    // Suscripción a cambios en la conversación (bloqueo, mensajes temporales, silenciado, presencia en sala)
+    const unsubscribeConversation = subscribeToConversation(conversationId, (updatedConv) => {
+      if (updatedConv) {
+        setConversation(updatedConv);
+        setIsLoadingConv(false);
+      }
+    });
+
+    // Tiempo máximo de espera si la conversación aún se está sincronizando desde Firestore
+    const loadTimeout = setTimeout(() => {
+      setIsLoadingConv(false);
+    }, 1800);
+
+    // Marcar como leído inicialmente al acceder a la conversación
+    if (currentUser) {
+      markConversationAsRead(conversationId, currentUser);
+    }
+
+    const handleProfileUpdate = () => {
+      const latest = getConversationById(conversationId);
+      if (latest) setConversation(latest);
+      setMessages(getStoredMessages(conversationId));
+    };
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
+
     return () => {
-      window.removeEventListener(CHAT_EVENT, handleChatUpdate);
-      window.removeEventListener(PROFILE_UPDATED_EVENT, handleChatUpdate);
+      clearTimeout(loadTimeout);
+      unsubscribeMessages();
+      unsubscribeConversation();
+      window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
     };
   }, [conversationId, currentUser]);
+
+  // Identificar los candidatos del usuario actual
+  const myCandidates = getUserCandidateKeys(currentUser).map((k) => String(k).trim().toLowerCase());
+
+  // Resolución inmediata e infalible del interlocutor
+  const otherParticipant = resolveConversationPeer(conversation, currentUser);
+  const otherParticipantId =
+    otherParticipant?.id ||
+    conversation?.participants?.find((p) => !myCandidates.includes(String(p).trim().toLowerCase())) ||
+    conversation?.participants?.find((p) => p !== currentUserId) ||
+    "";
+
+  // Estado de conexión en línea y última actividad del otro usuario
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
+  const [otherLastActive, setOtherLastActive] = useState(null);
+
+  // Notificar en Firestore que el usuario actual está activo dentro de este chat
+  useEffect(() => {
+    if (!conversationId || !currentUser) return;
+    setUserActiveInChat(conversationId, currentUser, true);
+    return () => {
+      setUserActiveInChat(conversationId, currentUser, false);
+    };
+  }, [conversationId, currentUser]);
+
+  // Suscribirse al estado en línea (presence) del interlocutor en tiempo real
+  useEffect(() => {
+    const target = otherParticipant?.id ? otherParticipant : otherParticipantId;
+    if (!target) return;
+    const unsub = subscribeToUserOnlineStatus(target, (online, lastIso) => {
+      setIsOtherOnline(Boolean(online));
+      setOtherLastActive(lastIso || null);
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, [otherParticipantId, otherParticipant?.id, otherParticipant?.uid]);
 
   // Desplazamiento automático al final ante nuevos mensajes
   useEffect(() => {
@@ -204,7 +275,7 @@ export const ChatDetailPage = () => {
     if (!file) return;
     e.target.value = "";
     try {
-      const compressedDataUrl = await compressImage(file, 1280, 1280, 0.85);
+      const compressedDataUrl = await compressImage(file, 1024, 1024, 0.78);
       setPendingImage({
         dataUrl: compressedDataUrl,
         caption: ""
@@ -405,6 +476,18 @@ export const ChatDetailPage = () => {
     }
   };
 
+  // Mientras se sincroniza una conversación recién abierta desde Firestore
+  if (!conversation && isLoadingConv) {
+    return (
+      <div className="p-8 text-center space-y-3 max-w-sm mx-auto my-16 animate-fade-in">
+        <div className="w-12 h-12 mx-auto rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400">
+          <Clock className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-semibold text-slate-300">Sincronizando conversación...</p>
+      </div>
+    );
+  }
+
   // Si la conversación no existe
   if (!conversation) {
     return (
@@ -424,14 +507,13 @@ export const ChatDetailPage = () => {
     );
   }
 
-  // Identificar los datos del interlocutor
-  const otherParticipantId = conversation.participants?.find((p) => p !== currentUserId);
-  const otherParticipant = conversation.participantsData?.[otherParticipantId] || {
-    id: otherParticipantId,
-    name: "Vendedor / Usuario",
-    username: "usuario",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-  };
+  // Candidatos de identificación del interlocutor y verificación de actividad en chat
+  const otherCandidates = getUserCandidateKeys(otherParticipant || otherParticipantId);
+  const isOtherActiveInChat = Boolean(
+    conversation?.activeInChat &&
+    typeof conversation.activeInChat === "object" &&
+    otherCandidates.some((c) => c && conversation.activeInChat?.[c] === true)
+  );
 
   // Estados derivados de bloqueo y silencio
   const isBlocked = Boolean(conversation.blockedBy);
@@ -439,7 +521,41 @@ export const ChatDetailPage = () => {
   const isBlockedByOther = isBlocked && !isBlockedByMe;
   const muteStatus = getChatMuteStatus(conversation, currentUser);
 
+  const handleChatSwipeStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      chatSwipeStartXRef.current = e.touches[0].clientX;
+      chatSwipeStartYRef.current = e.touches[0].clientY;
+      chatSwipeStartTimeRef.current = Date.now();
+    }
+  };
+
+  const handleChatSwipeEnd = (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const diffX = e.changedTouches[0].clientX - chatSwipeStartXRef.current;
+    const diffY = e.changedTouches[0].clientY - chatSwipeStartYRef.current;
+    const elapsed = Date.now() - chatSwipeStartTimeRef.current;
+
+    // Deslizar con el dedo de izquierda a derecha desde el borde (< 90px)
+    if (diffX > 65 && Math.abs(diffY) < 55 && elapsed < 600 && chatSwipeStartXRef.current < 90) {
+      handleBack();
+    }
+  };
+
   const handleBack = () => {
+    // Si provino de la notificación flotante in-app (Toast):
+    // "si se retrocede de ese chat (con el gesto tacti o con la flecha de retorno llevará al usuario a la panbtalla de chats, si se retrocede de ella, llevará al usuario a la pantalla donde estuviera antes de pulsar en la notifiacion del mensahe"
+    const toastOrigin =
+      location.state?.originPath ||
+      (typeof window !== "undefined" && sessionStorage.getItem("anunciossv_toast_return_origin"));
+
+    if (toastOrigin) {
+      navigate("/messages", {
+        replace: true,
+        state: { fromToastOrigin: toastOrigin }
+      });
+      return;
+    }
+
     if (window.history.length > 1) {
       navigate(-1);
     } else {
@@ -455,37 +571,17 @@ export const ChatDetailPage = () => {
     const trimmedText = text.trim();
     setSending(true);
     setInputText("");
-
-    // Mensaje optimista temporal con estado "enviando"
-    const tempId = `temp_${Date.now()}`;
-    const optimisticMessage = {
-      id: tempId,
-      conversationId,
-      senderId: currentUserId,
-      senderName: currentUser.displayName || currentUser.name || "Tú",
-      senderAvatar: currentUser.avatar || "",
-      text: trimmedText,
-      createdAt: new Date().toISOString(),
-      status: "enviando",
-      read: false,
-      isTemporary: Boolean(conversation?.isTemporary),
-      temporaryHours: conversation?.temporaryHours || 24
-    };
-
-    setMessages((prev) => [...prev, optimisticMessage]);
+    inputRef.current?.focus();
 
     try {
-      const sentMsg = await sendMessage({
+      // sendMessage inserta el mensaje localmente en 0 ms con estado "enviando" y lo confirma con Firestore
+      await sendMessage({
         conversationId,
         sender: currentUser,
         text: trimmedText
       });
-      // Reemplazar mensaje temporal con el confirmado
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? sentMsg : m)));
-      inputRef.current?.focus();
     } catch (err) {
       alert("Error al enviar el mensaje: " + err.message);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
       setSending(false);
     }
@@ -560,11 +656,30 @@ export const ChatDetailPage = () => {
     }
   };
 
+  // Identifica si un mensaje fue enviado por el usuario actual contrastando múltiples identificadores
+  const isMessageFromMe = (msg) => {
+    if (!msg || !currentUser) return false;
+    const myIdentifiers = [
+      currentUser.id,
+      currentUser.uid,
+      currentUser.email,
+      currentUser.username,
+      currentUserId
+    ].filter(Boolean).map((v) => String(v).trim().toLowerCase().replace(/^@/, ""));
+
+    const senderIdentifiers = [
+      msg.senderId,
+      msg.senderUsername,
+      msg.senderEmail
+    ].filter(Boolean).map((v) => String(v).trim().toLowerCase().replace(/^@/, ""));
+
+    return myIdentifiers.some((id) => senderIdentifiers.includes(id));
+  };
+
   // Renderiza el estado visual del mensaje ("Enviando", "Enviado", "Recibido", "Leído")
   const renderMessageStatus = (msg) => {
-    const status = msg.status || (msg.read ? "leido" : "recibido");
-
-    if (status === "enviando") {
+    // 1. Mensaje en proceso de envío
+    if (msg.status === "enviando" || String(msg.id).startsWith("temp_")) {
       return (
         <span className="flex items-center gap-1 text-[9px] text-indigo-300 font-medium">
           <Clock className="w-2.5 h-2.5 animate-pulse" />
@@ -573,16 +688,58 @@ export const ChatDetailPage = () => {
       );
     }
 
-    if (status === "enviado") {
+    // 2. Mensaje con fallo de sincronización
+    if (msg.status === "error") {
       return (
-        <span className="flex items-center gap-1 text-[9px] text-indigo-200 font-medium">
-          <Check className="w-2.5 h-2.5" />
-          <span>Enviado</span>
+        <span className="flex items-center gap-1 text-[9px] text-amber-300 font-semibold">
+          <AlertCircle className="w-2.5 h-2.5" />
+          <span>Sin conexión</span>
         </span>
       );
     }
 
-    if (status === "recibido") {
+    const msgTimeMs = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+
+    // Obtener marcas de tiempo de lectura y entrega del interlocutor en la conversación
+    const getPeerMapTimestamp = (mapObj) => {
+      if (!mapObj || typeof mapObj !== "object") return 0;
+      let latest = 0;
+      otherCandidates.forEach((cand) => {
+        if (!cand) return;
+        const val = mapObj[cand];
+        if (!val) return;
+        const ms = typeof val === "string" ? new Date(val).getTime() : (val?.seconds ? val.seconds * 1000 : 0);
+        if (!isNaN(ms) && ms > latest) latest = ms;
+      });
+      return latest;
+    };
+
+    const otherLastSeenMs = getPeerMapTimestamp(conversation?.lastSeenInChat);
+    const otherLastDeliveredMs = getPeerMapTimestamp(conversation?.lastDeliveredAt);
+
+    // 3. Leído: confirmado en el mensaje, interlocutor dentro del chat o vio el chat después de crearse el mensaje
+    const isReadByOther =
+      msg.read === true ||
+      msg.status === "leido" ||
+      isOtherActiveInChat ||
+      (otherLastSeenMs > 0 && msgTimeMs > 0 && otherLastSeenMs >= msgTimeMs);
+
+    if (isReadByOther) {
+      return (
+        <span className="flex items-center gap-1 text-[9px] text-cyan-300 font-bold">
+          <CheckCheck className="w-3 h-3 text-cyan-300" />
+          <span>Leído</span>
+        </span>
+      );
+    }
+
+    // 4. Recibido: el interlocutor está conectado o su app ya confirmó entrega del mensaje
+    const isReceived =
+      msg.status === "recibido" ||
+      isOtherOnline ||
+      (otherLastDeliveredMs > 0 && msgTimeMs > 0 && otherLastDeliveredMs >= msgTimeMs);
+
+    if (isReceived) {
       return (
         <span className="flex items-center gap-1 text-[9px] text-slate-300 font-medium">
           <CheckCheck className="w-3 h-3 text-slate-300" />
@@ -591,11 +748,11 @@ export const ChatDetailPage = () => {
       );
     }
 
-    // Estado "leido"
+    // 5. Enviado: almacenado en el servidor, pendiente de que el receptor se conecte
     return (
-      <span className="flex items-center gap-1 text-[9px] text-cyan-300 font-bold">
-        <CheckCheck className="w-3 h-3 text-cyan-300" />
-        <span>Leído</span>
+      <span className="flex items-center gap-1 text-[9px] text-indigo-200 font-medium">
+        <Check className="w-2.5 h-2.5" />
+        <span>Enviado</span>
       </span>
     );
   };
@@ -612,6 +769,8 @@ export const ChatDetailPage = () => {
   return (
     <div
       style={{ height: `${viewportHeight}px` }}
+      onTouchStart={handleChatSwipeStart}
+      onTouchEnd={handleChatSwipeEnd}
       className="flex flex-col w-full max-w-md mx-auto bg-slate-950 overflow-hidden relative select-none"
     >
       {/* 1. Bloque Superior FIJO: Cabecera y Publicación Negociada */}
@@ -634,17 +793,40 @@ export const ChatDetailPage = () => {
               state={{
                 fromChat: true,
                 chatPath: location.pathname + location.search,
-                chatId: conversation?.id || conversationId
+                chatId: conversation?.id || conversationId,
+                sellerData: {
+                  id: otherParticipant.id,
+                  name: otherParticipant.name,
+                  avatar: otherParticipant.avatar,
+                  username: otherParticipant.username,
+                  rating: otherParticipant.rating || 5.0,
+                  reviewsCount: otherParticipant.reviewsCount || 0,
+                  verified: Boolean(otherParticipant.verified)
+                }
               }}
               className="flex items-center gap-2.5 min-w-0 group"
             >
               <div className="relative flex-shrink-0">
-                <img
-                  src={otherParticipant.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"}
-                  alt={otherParticipant.name}
-                  className="w-10 h-10 rounded-full object-cover border border-slate-700 group-hover:border-indigo-500 transition-colors"
+                {otherParticipant.avatar ? (
+                  <img
+                    src={otherParticipant.avatar}
+                    alt={otherParticipant.name}
+                    className="w-10 h-10 rounded-full object-cover border border-slate-700 group-hover:border-indigo-500 transition-colors"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 group-hover:border-indigo-500 transition-colors flex items-center justify-center text-slate-400">
+                    <User className="w-5 h-5" />
+                  </div>
+                )}
+                <span
+                  title={isOtherActiveInChat ? "En el chat" : isOtherOnline ? "Conectado" : "Desconectado"}
+                  className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-slate-950 transition-colors ${isOtherActiveInChat
+                    ? "bg-emerald-400 animate-pulse"
+                    : isOtherOnline
+                    ? "bg-emerald-500"
+                    : "bg-slate-500"
+                    }`}
                 />
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-slate-950" />
               </div>
 
               <div className="min-w-0">
@@ -665,11 +847,21 @@ export const ChatDetailPage = () => {
                 ) : conversation.isTemporary ? (
                   <p className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
                     <Clock className="w-3 h-3 text-amber-400 animate-pulse" />
-                    <span>Temporales ({currentTemporaryHours}h)</span>
+                    <span>Temporales ({currentTemporaryHours}h) · {isOtherOnline || isOtherActiveInChat ? "Conectado" : "Desconectado"}</span>
+                  </p>
+                ) : isOtherActiveInChat ? (
+                  <p className="text-[10px] text-emerald-400 font-semibold truncate flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    <span>Conectado · En el chat</span>
+                  </p>
+                ) : isOtherOnline ? (
+                  <p className="text-[10px] text-emerald-400 font-medium truncate flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    <span>Conectado</span>
                   </p>
                 ) : (
                   <p className="text-[10px] text-slate-400 truncate">
-                    @{otherParticipant.username?.replace(/^@/, "") || "usuario"} · Activo
+                    Desconectado{otherLastActive ? ` · ${formatLastSeen(otherLastActive)}` : ""}
                   </p>
                 )}
               </div>
@@ -693,7 +885,11 @@ export const ChatDetailPage = () => {
 
         {/* Publicación Negociada FIJA (siempre visible arriba si existe producto) */}
         {conversation.product && (() => {
-          const productChatLink = `/product/${conversation.product.id}?from=chat&chatId=${encodeURIComponent(conversation.id || conversationId || "")}`;
+          const liveProduct = conversation.product.id ? getProductById(conversation.product.id) : null;
+          const currentProduct = liveProduct ? { ...conversation.product, ...liveProduct } : conversation.product;
+          const priceInfo = formatProductPrice(currentProduct);
+
+          const productChatLink = `/product/${currentProduct.id || conversation.product.id}?from=chat&chatId=${encodeURIComponent(conversation.id || conversationId || "")}`;
           const productChatState = {
             fromChat: true,
             chatPath: location.pathname + location.search,
@@ -709,8 +905,13 @@ export const ChatDetailPage = () => {
                   className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-90 transition-opacity"
                 >
                   <img
-                    src={conversation.product.image || "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=200&q=80"}
-                    alt={conversation.product.title}
+                    src={
+                      currentProduct.image ||
+                      (Array.isArray(currentProduct.images) && currentProduct.images[0]) ||
+                      conversation.product.image ||
+                      "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=200&q=80"
+                    }
+                    alt={currentProduct.title || conversation.product.title}
                     className="w-11 h-11 rounded-lg object-cover bg-slate-950 border border-slate-800 flex-shrink-0"
                   />
                   <div className="min-w-0">
@@ -718,16 +919,14 @@ export const ChatDetailPage = () => {
                       Publicación negociada
                     </span>
                     <h3 className="text-xs font-bold text-white truncate">
-                      {conversation.product.title}
+                      {currentProduct.title || conversation.product.title}
                     </h3>
                     <span className="text-xs font-black text-indigo-400">
-                      {conversation.product.isFree
+                      {priceInfo.isFree
                         ? "GRATIS"
-                        : conversation.product.priceMode === "contact"
+                        : priceInfo.isContact
                           ? "💬 A consultar"
-                          : conversation.product.priceMode === "range" || conversation.product.isPriceRange
-                          ? `$${formatMoney(conversation.product.minPrice)} - $${formatMoney(conversation.product.maxPrice)} USD`
-                          : `$${formatMoney(conversation.product.price)} USD`}
+                          : `${priceInfo.text}${priceInfo.periodSuffix || ""}${priceInfo.currency ? ` ${priceInfo.currency}` : " USD"}`}
                     </span>
                   </div>
                 </Link>
@@ -784,7 +983,7 @@ export const ChatDetailPage = () => {
               );
             }
 
-            const isMe = msg.senderId === currentUserId;
+            const isMe = isMessageFromMe(msg);
             const isSelected = selectedMessageIds.includes(msg.id);
             const isSelectionMode = selectedMessageIds.length > 0;
 
@@ -801,7 +1000,7 @@ export const ChatDetailPage = () => {
                     handleMessagePointerDown(msg);
                   }}
                   onClick={() => handleMessageClick(msg)}
-                  className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} select-none cursor-pointer`}
+                  className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} animate-message-enter select-none cursor-pointer`}
                 >
                   {/* Checkbox en modo selección */}
                   {isSelectionMode && (
@@ -847,7 +1046,7 @@ export const ChatDetailPage = () => {
                     handleMessagePointerDown(msg);
                   }}
                   onClick={() => handleMessageClick(msg)}
-                  className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} select-none cursor-pointer`}
+                  className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} animate-message-enter select-none cursor-pointer`}
                 >
                   {/* Checkbox en modo selección */}
                   {isSelectionMode && (
@@ -939,7 +1138,7 @@ export const ChatDetailPage = () => {
                   handleMessagePointerDown(msg);
                 }}
                 onClick={() => handleMessageClick(msg)}
-                className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} select-none cursor-pointer`}
+                className={`flex items-center gap-2 ${isMe ? "justify-end" : "justify-start"} animate-message-enter select-none cursor-pointer`}
               >
                 {/* Checkbox en modo selección */}
                 {isSelectionMode && (
@@ -1331,11 +1530,11 @@ export const ChatDetailPage = () => {
       {confirmModal && (
         <div
           onClick={() => setConfirmModal(null)}
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-backdrop-enter"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl animate-fade-in"
+            className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-up"
           >
             <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
               <ShieldAlert className="w-6 h-6" />
@@ -1376,11 +1575,11 @@ export const ChatDetailPage = () => {
       {isDeleteModalOpen && (
         <div
           onClick={() => setIsDeleteModalOpen(false)}
-          className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-backdrop-enter"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl animate-fade-in text-center"
+            className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-up text-center"
           >
             <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
               <Trash2 className="w-6 h-6" />

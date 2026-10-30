@@ -233,28 +233,44 @@ const enrichProductsWithLatestProfiles = (productsList) => {
 };
 
 /**
- * Obtiene todos los productos guardados (localStorage + mock inicial)
+ * Obtiene todos los productos guardados (localStorage depurado o Firestore)
  */
 export const getStoredProducts = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return enrichProductsWithLatestProfiles(parsed);
+      if (Array.isArray(parsed)) {
+        // Purgar cualquier publicación mock residual anterior (prod-101..106, usr-01..05)
+        const realProducts = parsed.filter((p) => {
+          if (!p || !p.id) return false;
+          const isOldMockId = /^prod-10[1-6]$/.test(String(p.id));
+          const isOldMockSeller = p.seller && /^usr-0[1-5]$/.test(String(p.seller.id));
+          return !isOldMockId && !isOldMockSeller;
+        });
+
+        if (realProducts.length !== parsed.length) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(realProducts));
+          } catch (e) {
+            console.warn("Aviso al depurar mocks en localStorage:", e);
+          }
+        }
+
+        return enrichProductsWithLatestProfiles(realProducts);
       }
     }
   } catch (err) {
     console.error("Error al leer productos de localStorage:", err);
   }
 
-  // Si no hay datos en localStorage, inicializar con los productos de demostración
+  // Si no hay datos en localStorage, inicializar vacío
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_PRODUCTS));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
   } catch (err) {
-    console.warn("No se pudo escribir MOCK_PRODUCTS en localStorage:", err);
+    console.warn("No se pudo escribir en localStorage:", err);
   }
-  return enrichProductsWithLatestProfiles(MOCK_PRODUCTS);
+  return [];
 };
 
 /**
@@ -1092,18 +1108,26 @@ export const getFavoriteProducts = (user = null) => {
 };
 
 /**
- * Obtiene todas las publicaciones pertenecientes a un vendedor por su id o nombre
+ * Obtiene todas las publicaciones pertenecientes a un vendedor por su id, uid o nombre
  */
 export const getProductsBySellerId = (sellerId) => {
   if (!sellerId) return [];
-  const decodedId = decodeURIComponent(sellerId).trim().toLowerCase();
+  let decodedId = String(sellerId).trim().toLowerCase();
+  try {
+    decodedId = decodeURIComponent(sellerId).trim().toLowerCase();
+  } catch (_) {}
+
   const all = getStoredProducts();
 
   return all.filter((p) => {
-    const sId = String(p.seller?.id || "").trim().toLowerCase();
-    const sName = String(p.seller?.name || "").trim().toLowerCase();
+    const sId = String(p.seller?.id || p.seller?.uid || "").trim().toLowerCase();
+    const sName = String(p.seller?.name || p.seller?.displayName || "").trim().toLowerCase();
     const sUsername = String(p.seller?.username || "").trim().toLowerCase().replace("@", "");
-    return sId === decodedId || sName === decodedId || sUsername === decodedId;
+    return (
+      (sId && sId === decodedId) ||
+      (sName && sName === decodedId) ||
+      (sUsername && sUsername === decodedId)
+    );
   });
 };
 
@@ -1112,25 +1136,32 @@ export const getProductsBySellerId = (sellerId) => {
  */
 export const getSellerInfo = (sellerId) => {
   if (!sellerId) return null;
-  const decodedId = decodeURIComponent(sellerId).trim();
+  let decodedId = String(sellerId).trim();
+  try {
+    decodedId = decodeURIComponent(sellerId).trim();
+  } catch (_) {}
   const decodedLower = decodedId.toLowerCase();
 
   // 1. Consultar registro central de perfiles públicos actualizados
-  const cachedProfile = getPublicProfile(sellerId);
+  const cachedProfile = getPublicProfile(sellerId) || getPublicProfile(decodedId);
 
   const all = getStoredProducts();
   const match = all.find((p) => {
-    const sId = String(p.seller?.id || "").trim().toLowerCase();
-    const sName = String(p.seller?.name || "").trim().toLowerCase();
+    const sId = String(p.seller?.id || p.seller?.uid || "").trim().toLowerCase();
+    const sName = String(p.seller?.name || p.seller?.displayName || "").trim().toLowerCase();
     const sUsername = String(p.seller?.username || "").trim().toLowerCase().replace("@", "");
-    return sId === decodedLower || sName === decodedLower || sUsername === decodedLower;
+    return (
+      (sId && sId === decodedLower) ||
+      (sName && sName === decodedLower) ||
+      (sUsername && sUsername === decodedLower)
+    );
   });
 
   if (match?.seller || cachedProfile) {
     const baseSeller = match?.seller || {};
     return {
-      id: cachedProfile?.id || baseSeller.id || sellerId,
-      name: cachedProfile?.displayName || cachedProfile?.name || baseSeller.name || "Vendedor AnunciosSV",
+      id: cachedProfile?.id || cachedProfile?.uid || baseSeller.id || baseSeller.uid || sellerId,
+      name: cachedProfile?.displayName || cachedProfile?.name || baseSeller.displayName || baseSeller.name || "Vendedor AnunciosSV",
       username: cachedProfile?.username
         ? `@${cachedProfile.username.replace(/^@/, "")}`
         : (baseSeller.username || (baseSeller.name ? `@${baseSeller.name.toLowerCase().replace(/\s+/g, "_")}` : "@vendedor")),
@@ -1138,7 +1169,7 @@ export const getSellerInfo = (sellerId) => {
       rating: cachedProfile?.rating || baseSeller.rating || 5.0,
       reviewsCount: cachedProfile?.reviewsCount || baseSeller.reviewsCount || 0,
       verified: cachedProfile?.verified !== undefined ? cachedProfile.verified : Boolean(baseSeller.verified),
-      location: match?.department || match?.location || "San Salvador, El Salvador",
+      location: match?.department || match?.location || baseSeller.location || "San Salvador, El Salvador",
       memberSince: "Marzo 2024",
       bio: "Comerciante activo en AnunciosSV ofreciendo productos verificados y atención confiable."
     };
@@ -1147,8 +1178,8 @@ export const getSellerInfo = (sellerId) => {
   // Fallback si no hay publicaciones coincidentes
   return {
     id: sellerId,
-    name: decodeURIComponent(sellerId),
-    username: `@${decodeURIComponent(sellerId).toLowerCase().replace(/\s+/g, "_")}`,
+    name: decodedId,
+    username: `@${decodedId.toLowerCase().replace(/\s+/g, "_")}`,
     avatar: resolveUserAvatar(sellerId, "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"),
     rating: 5.0,
     reviewsCount: 0,

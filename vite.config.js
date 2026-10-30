@@ -7,5 +7,6 @@ export default defineConfig({
   server: {
     host: true, // Expone el servidor en la red local (Wi-Fi) para acceso desde smartphones
     port: 5173,
+    allowedHosts: true, // Permite túneles externos como localtunnel (.loca.lt)
   },
 })

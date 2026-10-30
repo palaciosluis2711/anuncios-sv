@@ -33,9 +33,15 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Modo: 'login' o 'register'
-  const [mode, setMode] = useState("login");
+  // Modo: 'login' o 'register' (respeta el modo solicitado desde el modal)
+  const [mode, setMode] = useState(() => (location.state?.mode === "register" ? "register" : "login"));
   const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    if (location.state?.mode && (location.state.mode === "login" || location.state.mode === "register")) {
+      setMode(location.state.mode);
+    }
+  }, [location.state]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

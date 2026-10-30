@@ -5,6 +5,35 @@
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+
+  /* Excepción para permitir selección y escritura en inputs y áreas editables */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    -webkit-touch-callout: default !important;
+  }
+
+  /* Deshabilitar arrastre y selección sobre imágenes e iconos en toda la app */
+  img,
+  svg {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-drag: none !important;
+    user-drag: none !important;
+    pointer-events: auto;
   }
 
   html,
@@ -113,34 +142,274 @@
   }
 
   /* Animación de deslizamiento suave hacia arriba para menús y modales inferiores (Bottom Sheets) */
-  .animate-slide-up-sheet {
-    animation: slideUpSheet 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  .animate-slide-up-sheet,
+  .animate-sheet-enter {
+    animation: slideUpSheet 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
   }
 
   /* Animación de deslizamiento suave hacia abajo para cierre de menús inferiores */
-  .animate-slide-down-sheet {
-    animation: slideDownSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  .animate-slide-down-sheet,
+  .animate-sheet-exit {
+    animation: slideDownSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
+  }
+
+  /* Animación suave para fondos oscuros de modales */
+  .animate-backdrop-enter {
+    animation: backdropEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Animación suave para cajas de modales de centro (Scale & Pop) */
+  .animate-scale-up,
+  .animate-modal-enter {
+    animation: modalEnter 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
+  }
+}
+
+@keyframes backdropEnter {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.93) translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
   }
 }
 
 @keyframes slideUpSheet {
   0% {
-    transform: translateY(100%);
+    transform: translate3d(0, 100%, 0);
     opacity: 0.8;
   }
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
 }
 
 @keyframes slideDownSheet {
   0% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
   100% {
-    transform: translateY(100%);
+    transform: translate3d(0, 100%, 0);
     opacity: 0.8;
+  }
+}
+
+/* Transición suave de entrada para todas las pantallas de la aplicación */
+.animate-page-enter {
+  animation: pageEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Transición suave de entrada para cabeceras fijas */
+.animate-header-enter {
+  animation: headerEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes headerEnter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Transiciones suaves de apertura y cierre para el visualizador a pantalla completa de fotos (Lightbox) */
+.animate-lightbox-backdrop-in {
+  animation: lightboxBackdropIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, backdrop-filter;
+}
+
+.animate-lightbox-backdrop-out {
+  animation: lightboxBackdropOut 0.22s ease-in both;
+  will-change: opacity;
+}
+
+@keyframes lightboxBackdropIn {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(24px);
+  }
+}
+
+@keyframes lightboxBackdropOut {
+  0% {
+    opacity: 1;
+    backdrop-filter: blur(24px);
+  }
+  100% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+.animate-lightbox-image-in {
+  animation: lightboxImageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-lightbox-image-out {
+  animation: lightboxImageOut 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes lightboxImageIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes lightboxImageOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.94) translate3d(0, 8px, 0);
+  }
+}
+
+.animate-lightbox-header-in {
+  animation: lightboxHeaderIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-lightbox-header-out {
+  animation: lightboxHeaderOut 0.2s ease-in both;
+  will-change: transform, opacity;
+}
+
+@keyframes lightboxHeaderIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -14px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes lightboxHeaderOut {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -14px, 0);
+  }
+}
+
+.animate-lightbox-footer-in {
+  animation: lightboxFooterIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-lightbox-footer-out {
+  animation: lightboxFooterOut 0.2s ease-in both;
+  will-change: transform, opacity;
+}
+
+@keyframes lightboxFooterIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes lightboxFooterOut {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+}
+
+/* Animación suave de llegada para nuevos mensajes en el chat */
+.animate-message-enter {
+  animation: messageSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes messageSlideIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Accesibilidad: Respetar preferencias de reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-enter,
+  .animate-message-enter,
+  .animate-scale-up,
+  .animate-modal-enter,
+  .animate-sheet-enter,
+  .animate-slide-up-sheet,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-lightbox-backdrop-in,
+  .animate-lightbox-backdrop-out,
+  .animate-lightbox-image-in,
+  .animate-lightbox-image-out,
+  .animate-lightbox-header-in,
+  .animate-lightbox-header-out,
+  .animate-lightbox-footer-in,
+  .animate-lightbox-footer-out {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

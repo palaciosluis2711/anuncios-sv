@@ -1,17 +1,36 @@
 // Layout principal Mobile-First para la aplicación de clasificados y red social
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import MobileHeader from "../components/mobile/MobileHeader";
 import BottomNav from "../components/mobile/BottomNav";
+import InAppMessageToast from "../components/mobile/InAppMessageToast";
 import RoleSwitcherBanner from "../components/common/RoleSwitcherBanner";
 import { Smartphone, Monitor } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { subscribeToUserConversations, startPresenceTracking } from "../services/chatService";
+import { subscribeToUserNotifications } from "../services/notificationService";
 
 export const MobileLayout = () => {
+  const { currentUser } = useAuth();
   // Permite simular vista móvil enmarcada o expandida en pantallas desktop
   const [isDeviceFrame, setIsDeviceFrame] = useState(true);
   const location = useLocation();
 
   const isChatDetail = location.pathname.startsWith("/messages/");
+
+  // Suscripción reactiva global en tiempo real a conversaciones, notificaciones y presencia
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubChats = subscribeToUserConversations(currentUser, () => {});
+    const unsubNotifs = subscribeToUserNotifications(currentUser, () => {});
+    const stopPresence = startPresenceTracking(currentUser);
+
+    return () => {
+      unsubChats();
+      unsubNotifs();
+      stopPresence();
+    };
+  }, [currentUser]);
 
   return (
     <div
@@ -57,13 +76,17 @@ export const MobileLayout = () => {
         {/* Cabecera superior fija */}
         <MobileHeader />
 
-        {/* Contenido dinámico de las páginas */}
+        {/* Notificación flotante superior in-app de mensajes entrantes */}
+        <InAppMessageToast />
+
+        {/* Contenido dinámico con transición suave entre todas las pantallas de la app */}
         <main
+          key={location.pathname}
           className={`flex-1 ${
             isChatDetail
               ? "pb-0 h-full overflow-hidden flex flex-col"
               : "pb-24"
-          } animate-fade-in`}
+          } animate-page-enter`}
         >
           <Outlet />
         </main>

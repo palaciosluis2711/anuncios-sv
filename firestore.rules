@@ -66,5 +66,68 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // ============================================================
+    // PRESENCIA EN LÍNEA EN TIEMPO REAL (presence)
+    // ============================================================
+    // Lectura abierta para mostrar conectado/desconectado en chats y perfil público del vendedor;
+    // escritura restringida exclusivamente al propietario de la sesión.
+    match /presence/{userId} {
+      allow read: if true;
+      allow create, update: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      allow delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+    }
+
+    // ============================================================
+    // MENSAJERÍA EN TIEMPO REAL: CONVERSACIONES Y MENSAJES
+    // ============================================================
+    match /conversations/{conversationId} {
+      function isConvParticipant(data) {
+        return isAuthenticated() &&
+          data.participants is list &&
+          (request.auth.uid in data.participants ||
+           (request.auth.token.email != null && request.auth.token.email in data.participants));
+      }
+
+      // get permite resource == null para comprobar existencia (getDoc / onSnapshot inicial) sin error de permisos
+      allow get: if (isAuthenticated() && resource == null) || isConvParticipant(resource.data) || isAdmin();
+      allow list: if isConvParticipant(resource.data) || isAdmin();
+      allow create: if isConvParticipant(request.resource.data) || isAdmin();
+      allow update: if isConvParticipant(resource.data) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        function canAccessParentConversation() {
+          return isAuthenticated() && (
+            (exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+             request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants) ||
+            (existsAfter(/databases/$(database)/documents/conversations/$(conversationId)) &&
+             request.auth.uid in getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data.participants)
+          );
+        }
+
+        allow read: if canAccessParentConversation() || isAdmin();
+        allow create, update: if canAccessParentConversation() || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ============================================================
+    // NOTIFICACIONES EN TIEMPO REAL (notifications)
+    // ============================================================
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.recipientId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.recipientId == request.auth.uid || isAdmin());
+    }
+
+    // ============================================================
+    // REPUTACIÓN Y VALORACIONES DE VENDEDORES (ratings)
+    // ============================================================
+    match /ratings/{ratingId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
   }
 }

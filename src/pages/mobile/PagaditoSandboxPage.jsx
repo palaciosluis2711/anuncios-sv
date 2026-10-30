@@ -16,6 +16,7 @@ export const PagaditoSandboxPage = () => {
 
   const [transaction, setTransaction] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [testCard, setTestCard] = useState({
     number: "4111 2222 3333 4444",
     name: "JUAN PEREZ (USUARIO PRUEBA)",
@@ -29,7 +30,7 @@ export const PagaditoSandboxPage = () => {
       const raw = localStorage.getItem("anunciossv_pagadito_transactions");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed[tokenTrans]) {
+        if (parsed && typeof parsed === "object" && tokenTrans && parsed[tokenTrans]) {
           setTransaction(parsed[tokenTrans]);
         }
       }
@@ -56,14 +57,33 @@ export const PagaditoSandboxPage = () => {
     }
   };
 
-  // Cancelar la transacción
+  // Cancelar la transacción con transición suave hacia la publicación
   const handleCancelPayment = () => {
+    setIsCancelling(true);
     updateSandboxTransactionStatus(tokenTrans, "REVOKED");
-    navigate(`/payment-return?token=${tokenTrans}&status=cancelled`, { replace: true });
+
+    const productId = transaction?.customParams?.productId;
+
+    setTimeout(() => {
+      if (productId) {
+        navigate(`/product/${productId}?cancelled=true`, {
+          state: { paymentCancelled: true },
+          replace: true
+        });
+      } else {
+        navigate(`/?cancelled=true`, {
+          state: { paymentCancelled: true },
+          replace: true
+        });
+      }
+    }, 450);
   };
 
   const amount = transaction ? Number(transaction.amount).toFixed(2) : "7.99";
-  const productTitle = transaction?.customParams?.productTitle || "Destacar anuncio en AnunciosSV";
+  const rawTitle = transaction?.customParams?.productTitle || (transaction?.details?.[0]?.description) || "Publicación";
+  const displayConcept = rawTitle.startsWith("Destacar anuncio:")
+    ? rawTitle
+    : `Destacar anuncio: ${rawTitle}`;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col items-center justify-start pb-12 font-sans">
@@ -114,7 +134,7 @@ export const PagaditoSandboxPage = () => {
           </div>
 
           <div className="text-xs text-slate-600">
-            <span className="font-semibold text-slate-700">Concepto:</span> {productTitle}
+            <span className="font-semibold text-slate-700">Concepto:</span> {displayConcept}
           </div>
         </div>
 
@@ -170,7 +190,8 @@ export const PagaditoSandboxPage = () => {
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-slate-600">CVV / CVC:</label>
                 <input
-                  type="password"
+                  type="text"
+                  maxLength={4}
                   value={testCard.cvc}
                   onChange={(e) => setTestCard({ ...testCard, cvc: e.target.value })}
                   className="w-full h-10 px-3 rounded-xl border border-slate-300 text-center font-mono text-slate-800 focus:outline-none focus:border-[#004B93]"
@@ -183,30 +204,30 @@ export const PagaditoSandboxPage = () => {
           <div className="pt-2 space-y-2">
             <button
               type="button"
-              disabled={isProcessing}
+              disabled={isProcessing || isCancelling}
               onClick={handleApprovePayment}
               className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-[#004B93] hover:bg-[#003B75] text-white font-bold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
             >
               {isProcessing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Procesando con Pagadito...</span>
+                  <span>Procesando pago...</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Pagar ${amount} USD con Pagadito</span>
+                  <span>Pagar ${amount} USD</span>
                 </>
               )}
             </button>
 
             <button
               type="button"
-              disabled={isProcessing}
+              disabled={isProcessing || isCancelling}
               onClick={handleCancelPayment}
               className="w-full min-h-[38px] py-2 px-4 rounded-xl text-slate-500 hover:text-rose-600 text-xs font-semibold transition-colors"
             >
-              Cancelar y volver a AnunciosSV
+              Cancelar y volver
             </button>
           </div>
         </div>
@@ -220,6 +241,16 @@ export const PagaditoSandboxPage = () => {
           <div>Pagadito El Salvador © Todos los derechos reservados.</div>
         </div>
       </main>
+
+      {/* Transición suave al cancelar */}
+      {isCancelling && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-backdrop-enter transition-all">
+          <div className="bg-white p-4 rounded-2xl shadow-xl flex items-center gap-3 text-slate-700 text-xs font-bold animate-scale-up">
+            <div className="w-4 h-4 border-2 border-[#004B93] border-t-transparent rounded-full animate-spin" />
+            <span>Regresando a la publicación...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

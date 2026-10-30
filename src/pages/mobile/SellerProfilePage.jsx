@@ -9,22 +9,33 @@ import {
   MessageCircle,
   Package,
   Sparkles,
-  Heart,
   ExternalLink,
   ShieldCheck,
-  Share2
+  Share2,
+  Check
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
   getSellerInfo,
   getProductsBySellerId,
-  isProductFavorite,
-  toggleFavoriteProduct,
-  formatProductPrice,
-  FAVORITES_EVENT
+  getProductById,
+  formatProductPrice
 } from "../../services/productsService";
 import { PROFILE_UPDATED_EVENT } from "../../services/userProfileService";
-import { getOrCreateConversation } from "../../services/chatService";
+import {
+  getSellerRatingStats,
+  getUserRatingForSeller,
+  submitSellerRating,
+  subscribeToSellerRatings,
+  RATING_UPDATED_EVENT
+} from "../../services/reputationService";
+import { addNotification } from "../../services/notificationService";
+import {
+  getOrCreateConversation,
+  subscribeToUserOnlineStatus,
+  formatLastSeen
+} from "../../services/chatService";
+import { shareContent } from "../../services/shareService";
 
 export const SellerProfilePage = () => {
   const { sellerId } = useParams();
@@ -42,8 +53,41 @@ export const SellerProfilePage = () => {
   const chatId = location.state?.chatId || searchParams.get("chatId") || "";
   const chatPath = location.state?.chatPath || (chatId ? `/messages/${chatId}` : "/messages");
 
-  const [seller, setSeller] = useState(() => getSellerInfo(sellerId));
-  const [sellerProducts, setSellerProducts] = useState(() => getProductsBySellerId(sellerId));
+  // Inicialización inmediata y robusta de la información del vendedor
+  const [seller, setSeller] = useState(() => {
+    const fromState = location.state?.sellerData;
+    const fromService = getSellerInfo(sellerId);
+    if (fromService) {
+      return {
+        ...fromService,
+        ...(fromState || {})
+      };
+    }
+    return fromState || null;
+  });
+
+  // Inicialización de las publicaciones activas del vendedor con respaldo al producto actual
+  const [sellerProducts, setSellerProducts] = useState(() => {
+    const list = getProductsBySellerId(sellerId);
+    if (list && list.length > 0) return list;
+    const fallbackProductId = location.state?.productId || searchParams.get("productId");
+    if (fallbackProductId) {
+      const p = getProductById(fallbackProductId);
+      if (p) return [p];
+    }
+    return [];
+  });
+
+  // Estado reactivo de reputación y calificaciones
+  const [ratingStats, setRatingStats] = useState(() =>
+    getSellerRatingStats(sellerId, seller?.rating, seller?.reviewsCount)
+  );
+  const [currentUserRating, setCurrentUserRating] = useState(() =>
+    getUserRatingForSeller(sellerId, currentUser)
+  );
+  const [hoveredStar, setHoveredStar] = useState(0);
+  const [ratingFeedbackMsg, setRatingFeedbackMsg] = useState(null);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Referencias para detección de gesto táctil de retroceso (Swipe back)
   const touchStartXRef = useRef(0);
@@ -76,30 +120,122 @@ export const SellerProfilePage = () => {
 
   // Asegurar que siempre se muestre la parte superior al ingresar al perfil
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    try {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch (_) {}
   }, [sellerId]);
 
-  // Actualizar datos si cambian las publicaciones o favoritos
+  // Actualizar datos si cambian las publicaciones o el perfil
   useEffect(() => {
-    setSeller(getSellerInfo(sellerId));
-    setSellerProducts(getProductsBySellerId(sellerId));
-
     const handleUpdate = () => {
-      setSeller(getSellerInfo(sellerId));
-      setSellerProducts(getProductsBySellerId(sellerId));
+      const updatedSeller = getSellerInfo(sellerId);
+      if (updatedSeller) {
+        setSeller(updatedSeller);
+      }
+      const updatedProducts = getProductsBySellerId(sellerId);
+      if (updatedProducts && updatedProducts.length > 0) {
+        setSellerProducts(updatedProducts);
+      }
     };
 
     window.addEventListener("anunciossv_products_updated", handleUpdate);
-    window.addEventListener(FAVORITES_EVENT, handleUpdate);
     window.addEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
     return () => {
       window.removeEventListener("anunciossv_products_updated", handleUpdate);
-      window.removeEventListener(FAVORITES_EVENT, handleUpdate);
       window.removeEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
     };
   }, [sellerId]);
+
+  // Sincronizar estadísticas de calificación de 1 a 5 estrellas al emitirse votos en tiempo real
+  useEffect(() => {
+    const unsubscribe = subscribeToSellerRatings(sellerId, (stats) => {
+      if (stats) {
+        setRatingStats(stats);
+      }
+      setCurrentUserRating(getUserRatingForSeller(sellerId, currentUser));
+    });
+
+    return () => unsubscribe();
+  }, [sellerId, currentUser]);
+
+  // Detección segura de auto-calificación para evitar comparar "undefined" === "undefined"
+  const isSelf = Boolean(
+    currentUser &&
+    seller && (
+      (currentUser.id && seller.id && String(currentUser.id) === String(seller.id)) ||
+      (currentUser.uid && seller.id && String(currentUser.uid) === String(seller.id)) ||
+      (currentUser.username && seller.username && currentUser.username.toLowerCase().replace(/^@/, "") === seller.username.toLowerCase().replace(/^@/, ""))
+    )
+  );
+
+  // Estado reactivo de presencia en tiempo real del vendedor (conectado / desconectado)
+  const [isSellerOnline, setIsSellerOnline] = useState(false);
+  const [sellerLastActive, setSellerLastActive] = useState(null);
+
+  useEffect(() => {
+    const targetPresence =
+      seller?.id || seller?.uid
+        ? { id: seller?.id || sellerId, uid: seller?.uid }
+        : sellerId;
+    if (!targetPresence) return;
+
+    const unsubscribe = subscribeToUserOnlineStatus(targetPresence, (online, lastIso) => {
+      setIsSellerOnline(Boolean(online));
+      setSellerLastActive(lastIso || null);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [seller?.id, seller?.uid, sellerId]);
+
+  const effectiveOnline = Boolean(isSellerOnline || isSelf);
+
+  const handleRatingClick = (starValue) => {
+    if (isSelf) {
+      alert("No puedes calificar tu propio perfil de vendedor.");
+      return;
+    }
+
+    requireAuth(
+      () => {
+        try {
+          setIsSubmittingRating(true);
+          const newStats = submitSellerRating({
+            seller,
+            raterUser: currentUser,
+            score: starValue
+          });
+          setRatingStats(newStats);
+          setCurrentUserRating(starValue);
+          setRatingFeedbackMsg(`¡Gracias! Has calificado a ${seller.name} con ${starValue} ${starValue === 1 ? "estrella" : "estrellas"}.`);
+          setTimeout(() => setRatingFeedbackMsg(null), 4000);
+
+          // Registrar notificación para el vendedor destinatario
+          try {
+            addNotification({
+              userId: seller?.id || sellerId,
+              title: "Nueva calificación recibida",
+              message: `Un usuario ha calificado tu perfil de vendedor con ${starValue} ${starValue === 1 ? "estrella" : "estrellas"}.`,
+              type: "rating",
+              link: "/profile/reputation"
+            });
+          } catch (_) {}
+        } catch (err) {
+          alert("Error al emitir calificación: " + err.message);
+        } finally {
+          setIsSubmittingRating(false);
+        }
+      },
+      {
+        actionType: "rate",
+        title: "¿Calificar a este vendedor?",
+        message: `Inicia sesión o regístrate en AnunciosSV para calificar con estrellas a ${seller?.name || "este vendedor"}.`
+      }
+    );
+  };
 
   const handleSendMessage = () => {
     // Requerir inicio de sesión para contactar al vendedor
@@ -124,19 +260,13 @@ export const SellerProfilePage = () => {
   };
 
   const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: `Perfil de ${seller?.name} en AnunciosSV`,
-        text: `Conoce las publicaciones de ${seller?.name} en AnunciosSV`,
-        url: window.location.href
-      }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(window.location.href);
-      alert("Enlace del perfil copiado al portapapeles");
-    }
+    shareContent({
+      title: `Perfil de ${seller?.name} en AnunciosSV`,
+      text: `Conoce las publicaciones de ${seller?.name} en AnunciosSV`,
+      url: window.location.href
+    });
   };
 
-  const totalLikes = sellerProducts.reduce((acc, p) => acc + (Number(p.likesCount) || 0), 0);
 
   if (!seller) {
     return (
@@ -165,12 +295,25 @@ export const SellerProfilePage = () => {
       {/* 1. Tarjeta de Cabecera del Vendedor */}
       <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="flex items-start justify-between gap-3 relative z-10">
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              <img
-                src={seller.avatar}
-                alt={seller.name}
-                className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-lg"
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative flex-shrink-0">
+              {seller.avatar ? (
+                <img
+                  src={seller.avatar}
+                  alt={seller.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-lg"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-400 shadow-lg">
+                  <User className="w-8 h-8 text-slate-400" />
+                </div>
+              )}
+              {/* Punto indicador de conexión en tiempo real sobre el avatar */}
+              <span
+                className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-slate-900 ${
+                  effectiveOnline ? "bg-emerald-500" : "bg-slate-500"
+                }`}
+                title={effectiveOnline ? "Conectado" : "Desconectado"}
               />
               {seller.verified && (
                 <div className="absolute -bottom-1 -right-1 p-0.5 bg-slate-950 rounded-full">
@@ -185,10 +328,31 @@ export const SellerProfilePage = () => {
               </div>
               <div className="text-xs text-slate-400 truncate font-medium">{seller.username}</div>
 
+              {/* Estado de presencia en tiempo real (Conectado / Desconectado) */}
+              <div className="mt-1">
+                {effectiveOnline ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold text-emerald-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                    <span>Conectado</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-[10px] font-medium text-slate-400 max-w-full truncate">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 flex-shrink-0" />
+                    <span className="truncate">
+                      {sellerLastActive
+                        ? `Desconectado · ${formatLastSeen(sellerLastActive)}`
+                        : "Desconectado"}
+                    </span>
+                  </span>
+                )}
+              </div>
+
               <div className="mt-1 flex items-center gap-1 text-[11px] text-amber-400">
                 <Star className="w-3.5 h-3.5 fill-amber-400" />
-                <span className="font-bold text-slate-100">{seller.rating}</span>
-                <span className="text-slate-400">({seller.reviewsCount} opiniones)</span>
+                <span className="font-bold text-slate-100">{ratingStats.average}</span>
+                <span className="text-slate-400">
+                  ({ratingStats.count} {ratingStats.count === 1 ? "opinión" : "opiniones"})
+                </span>
               </div>
             </div>
           </div>
@@ -230,13 +394,105 @@ export const SellerProfilePage = () => {
             <div className="text-[10px] text-slate-400 font-medium">Anuncios</div>
           </div>
           <div>
-            <div className="text-sm font-bold text-white">{seller.rating} ★</div>
+            <div className="text-sm font-bold text-amber-400">{ratingStats.average} ★</div>
             <div className="text-[10px] text-slate-400 font-medium">Reputación</div>
           </div>
           <div>
-            <div className="text-sm font-bold text-white">{totalLikes}</div>
-            <div className="text-[10px] text-slate-400 font-medium">Me Gusta</div>
+            <div className="text-sm font-bold text-white">{ratingStats.count}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Valoraciones</div>
           </div>
+        </div>
+      </div>
+
+      {/* 2. Sección Interactiva de Reputación del Vendedor (Valoración de 1 a 5 estrellas) */}
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex-shrink-0">
+              <Star className="w-4 h-4 fill-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+                Reputación del Vendedor
+              </h2>
+              <p className="text-[11px] text-slate-400">
+                Promedio {ratingStats.average} de 5.0 · {ratingStats.count} {ratingStats.count === 1 ? "valoración recibida" : "valoraciones recibidas"}
+              </p>
+            </div>
+          </div>
+
+          {currentUserRating && (
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 flex-shrink-0">
+              <Check className="w-3 h-3" />
+              Tu voto: {currentUserRating} ★
+            </span>
+          )}
+        </div>
+
+        {/* Caja de Calificación con Estrellas */}
+        <div className="bg-slate-950/60 rounded-xl p-3.5 border border-slate-800/80 text-center space-y-2.5">
+          {isSelf ? (
+            <div className="py-2 text-xs text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-300">Este es tu perfil público de vendedor</p>
+              <p className="text-[11px]">Los usuarios registrados podrán puntuar tu reputación al visitar tus publicaciones.</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-xs text-slate-300 font-medium">
+                {currentUserRating ? (
+                  <span>
+                    Has calificado con <strong className="text-amber-400">{currentUserRating} {currentUserRating === 1 ? "estrella" : "estrellas"}</strong>. Puedes cambiar tu voto:
+                  </span>
+                ) : (
+                  <span>¿Qué tal tu experiencia con este vendedor? Califícalo aquí:</span>
+                )}
+              </div>
+
+              {/* Botones de 1 a 5 estrellas */}
+              <div className="flex items-center justify-center gap-2.5 py-1">
+                {[1, 2, 3, 4, 5].map((starVal) => {
+                  const isFilled = hoveredStar
+                    ? starVal <= hoveredStar
+                    : (currentUserRating && starVal <= currentUserRating);
+
+                  return (
+                    <button
+                      key={starVal}
+                      type="button"
+                      disabled={isSubmittingRating}
+                      onMouseEnter={() => setHoveredStar(starVal)}
+                      onMouseLeave={() => setHoveredStar(0)}
+                      onClick={() => handleRatingClick(starVal)}
+                      className={`p-1.5 rounded-xl transition-all duration-150 transform hover:scale-125 active:scale-95 focus:outline-none ${
+                        isFilled
+                          ? "text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.6)]"
+                          : "text-slate-600 hover:text-amber-300"
+                      }`}
+                      title={`Puntuar con ${starVal} ${starVal === 1 ? "estrella" : "estrellas"}`}
+                      aria-label={`Calificar con ${starVal} estrellas`}
+                    >
+                      <Star
+                        className={`w-8 h-8 transition-colors ${
+                          isFilled ? "fill-amber-400 text-amber-400" : "fill-transparent"
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                Puntuación de 1 a 5 estrellas {currentUser ? "" : "· Requiere cuenta registrada"}
+              </div>
+            </>
+          )}
+
+          {ratingFeedbackMsg && (
+            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold animate-fade-in flex items-center justify-center gap-1.5">
+              <Check className="w-4 h-4 text-emerald-400" />
+              <span>{ratingFeedbackMsg}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -264,7 +520,6 @@ export const SellerProfilePage = () => {
         {sellerProducts.length > 0 ? (
           <div className="space-y-2.5">
             {sellerProducts.map((prod) => {
-              const isFav = isProductFavorite(prod.id, currentUser);
               const productDetailLink = `/product/${prod.id}?from=seller${isFromChat ? "&fromChat=true" : ""}${chatId ? `&chatId=${encodeURIComponent(chatId)}` : ""}&sellerId=${encodeURIComponent(sellerId)}`;
               const productDetailState = {
                 fromSeller: true,
@@ -337,36 +592,12 @@ export const SellerProfilePage = () => {
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        requireAuth(
-                          () => {
-                            toggleFavoriteProduct(prod.id, currentUser);
-                          },
-                          {
-                            actionType: "like",
-                            title: "¿Guardar en tus favoritos?",
-                            message: "Inicia sesión para poder guardar este anuncio en tus favoritos y consultarlo cuando quieras."
-                          }
-                        );
-                      }}
-                      className={`p-2 rounded-xl transition-all active:scale-95 ${
-                        isFav
-                          ? "bg-rose-500 text-white shadow-sm"
-                          : "bg-slate-800 text-slate-400 hover:text-rose-400"
-                      }`}
-                      title={isFav ? "Quitar de favoritos" : "Guardar en favoritos"}
-                      aria-label="Favorito"
-                    >
-                      <Heart className={`w-4 h-4 ${isFav ? "fill-current" : ""}`} />
-                    </button>
-
                     <Link
                       to={productDetailLink}
                       state={productDetailState}
-                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                       title="Ver anuncio"
+                      aria-label="Ver anuncio"
                     >
                       <ExternalLink className="w-4 h-4" />
                     </Link>

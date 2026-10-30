@@ -118,7 +118,7 @@ export const AdminSidebar = ({ isMobileOpen, setIsMobileOpen }) => {
                       <span>{link.label}</span>
                     </div>
 
-                    {link.badge !== undefined && (
+                    {link.badge !== undefined && Number(link.badge) > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${link.badgeColor}`}>
                         {link.badge}
                       </span>

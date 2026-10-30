@@ -1052,10 +1052,12 @@ export const PublishPage = () => {
       status: "aprobado",
       seller: {
         id: currentUser?.id || currentUser?.uid || "usr-anon",
+        uid: currentUser?.uid || currentUser?.id || "",
+        username: currentUser?.username || "",
         name: currentUser?.displayName || currentUser?.name || `@${currentUser?.username || "usuario"}`,
         phone: currentUser?.phone || "",
         email: currentUser?.email || "",
-        avatar: currentUser?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+        avatar: currentUser?.avatar || "",
         rating: 5.0,
         reviewsCount: 0,
         verified: Boolean(currentUser?.verified)
@@ -2470,8 +2472,8 @@ export const PublishPage = () => {
 
       {/* Modal interactivo de confirmación para descartar nueva publicación */}
       {showDiscardModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl text-left">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-backdrop-enter">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl text-left animate-scale-up">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center flex-shrink-0">
                 <Trash2 className="w-5 h-5" />
@@ -2510,8 +2512,8 @@ export const PublishPage = () => {
 
       {/* Modal interactivo de advertencia por límite diario de publicaciones */}
       {showLimitModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl text-left">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-backdrop-enter">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl text-left animate-scale-up">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-6 h-6" />

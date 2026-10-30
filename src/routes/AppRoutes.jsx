@@ -11,12 +11,13 @@ import ProtectedRoute from "./ProtectedRoute";
 
 // Páginas de la App Móvil
 import HomePage from "../pages/mobile/HomePage";
-import ExplorePage from "../pages/mobile/ExplorePage";
 import PublishPage from "../pages/mobile/PublishPage";
 import ProfilePage from "../pages/mobile/ProfilePage";
+import EditProfilePage from "../pages/mobile/EditProfilePage";
 import ProductDetailPage from "../pages/mobile/ProductDetailPage";
 import ManageProductPage from "../pages/mobile/ManageProductPage";
 import SellerProfilePage from "../pages/mobile/SellerProfilePage";
+import UserReputationPage from "../pages/mobile/UserReputationPage";
 import LoginPage from "../pages/mobile/LoginPage";
 import MessagesPage from "../pages/mobile/MessagesPage";
 import ChatDetailPage from "../pages/mobile/ChatDetailPage";
@@ -24,6 +25,7 @@ import BlockedUsersPage from "../pages/mobile/BlockedUsersPage";
 import PromoteAdPage from "../pages/mobile/PromoteAdPage";
 import PaymentReturnPage from "../pages/mobile/PaymentReturnPage";
 import PagaditoSandboxPage from "../pages/mobile/PagaditoSandboxPage";
+import NotificationsPage from "../pages/mobile/NotificationsPage";
 
 // Páginas del Panel Webmaster (Admin)
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -42,8 +44,8 @@ export const AppRoutes = () => {
         {/* Feed de inicio */}
         <Route path="/" element={<HomePage />} />
         
-        {/* Exploración de categorías */}
-        <Route path="/explore" element={<ExplorePage />} />
+        {/* Redirección de la antigua sección Explorar hacia los Chats */}
+        <Route path="/explore" element={<Navigate to="/messages" replace />} />
         
         {/* Publicar anuncio (Protegido para usuarios autenticados) */}
         <Route
@@ -57,6 +59,22 @@ export const AppRoutes = () => {
         
         {/* Perfil del usuario y sus publicaciones */}
         <Route path="/profile" element={<ProfilePage />} />
+
+        {/* Pantalla dedicada para Editar Perfil y Datos de la Cuenta */}
+        <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute requireAdmin={false}>
+              <EditProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Reputación y valoraciones recibidas por el usuario */}
+        <Route path="/profile/reputation" element={<UserReputationPage />} />
+
+        {/* Notificaciones y avisos de actividad */}
+        <Route path="/notifications" element={<NotificationsPage />} />
         
         {/* Detalle del producto */}
         <Route path="/product/:id" element={<ProductDetailPage />} />

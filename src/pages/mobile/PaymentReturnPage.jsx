@@ -11,6 +11,7 @@ import {
   Home
 } from "lucide-react";
 import { verifyAndActivatePromotion } from "../../services/pagaditoService";
+import { addNotification } from "../../services/notificationService";
 
 export const PaymentReturnPage = () => {
   const [searchParams] = useSearchParams();
@@ -23,6 +24,20 @@ export const PaymentReturnPage = () => {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  // Prevenir retroceso con gestos táctiles nativos o botón de retroceso
+  useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -47,6 +62,18 @@ export const PaymentReturnPage = () => {
         if (!isCancelled) {
           if (res.success) {
             setResult(res);
+            try {
+              const targetUserId = res.product?.seller?.id || res.product?.sellerId;
+              if (targetUserId) {
+                addNotification({
+                  userId: targetUserId,
+                  title: "¡Anuncio destacado con éxito!",
+                  message: `Tu anuncio "${res.product?.title || "Publicación"}" ahora cuenta con destaque preferencial.`,
+                  type: "promotion",
+                  link: `/product/${res.product?.id}`
+                });
+              }
+            } catch (_) {}
           } else {
             setError(res.message || "No se pudo confirmar el pago con Pagadito.");
           }
@@ -112,7 +139,7 @@ export const PaymentReturnPage = () => {
 
   // 3. Estado de éxito: Anuncio destacado activado con halo dorado
   return (
-    <div className="min-h-[75vh] flex flex-col items-center justify-center p-4 max-w-sm mx-auto animate-fade-in text-center space-y-4">
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 max-w-sm mx-auto animate-fade-in text-center space-y-4">
       {/* Icono animado de felicitación con halo dorado */}
       <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-xl shadow-amber-500/30 animate-bounce">
         <Sparkles className="w-11 h-11 fill-current" />
@@ -121,7 +148,7 @@ export const PaymentReturnPage = () => {
       <div className="space-y-1">
         <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-center gap-1">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Pago Confirmado por Pagadito</span>
+          <span>Pago confirmado</span>
         </div>
         <h1 className="text-xl font-black text-white tracking-tight">
           ¡Tu Anuncio ha sido Destacado!
@@ -135,7 +162,7 @@ export const PaymentReturnPage = () => {
       {/* Tarjeta de detalles del pago */}
       <div className="w-full p-3.5 rounded-2xl bg-slate-900 border border-amber-500/30 shadow-md text-left space-y-2 text-xs">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-          <span className="text-slate-400 text-[11px]">Referencia Pagadito:</span>
+          <span className="text-slate-400 text-[11px]">Referencia:</span>
           <span className="font-mono font-bold text-amber-300 text-[11px]">{result.reference}</span>
         </div>
 
@@ -164,7 +191,7 @@ export const PaymentReturnPage = () => {
           className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
         >
           <Sparkles className="w-4.5 h-4.5 fill-slate-950" />
-          <span>Ver anuncio destacado en el Feed</span>
+          <span>Ir al Feed</span>
         </button>
 
         {result.productId && (
@@ -173,7 +200,7 @@ export const PaymentReturnPage = () => {
             onClick={() => navigate(`/product/${result.productId}`, { replace: true })}
             className="w-full min-h-[42px] py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold border border-slate-800 transition-all"
           >
-            Volver a los detalles del anuncio
+            Ver detalles del anuncio
           </button>
         )}
       </div>

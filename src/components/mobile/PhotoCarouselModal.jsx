@@ -32,12 +32,11 @@ export const PhotoCarouselModal = ({
 
   // Estados de ciclo de vida para entrada y salida animada suave
   const [isRendered, setIsRendered] = useState(isOpen);
-  const [isVisible, setIsVisible] = useState(false);
-  const isClosingRef = useRef(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   // Valores derivados para el despliegue interactivo en tiempo real al arrastrar hacia abajo
   const isDeploying = Boolean(interactiveDeploy?.isDeploying);
-  const deployProgress = isDeploying ? (interactiveDeploy?.progress ?? 0) : (isVisible ? 1 : 0);
+  const deployProgress = isDeploying ? (interactiveDeploy?.progress ?? 0) : 1;
   const deployOffsetY = isDeploying ? (interactiveDeploy?.offsetY ?? 0) : 0;
 
   // Referencias para el control de gestos fluido
@@ -52,41 +51,31 @@ export const PhotoCarouselModal = ({
   const activeImgRef = useRef(null);
   const thumbnailContainerRef = useRef(null);
 
-  // Sincronizar montaje y animación suave al abrir o cerrar (o durante despliegue interactivo)
+  // Sincronizar ciclo de vida para entrada y salida con animación fluida sin parpadeos ni desmontajes abruptos
   useEffect(() => {
-    if (isDeploying) {
-      isClosingRef.current = false;
+    if (isOpen || isDeploying) {
+      setIsClosing(false);
       setIsRendered(true);
-      setIsVisible(true);
-      return;
-    }
-
-    if (isOpen) {
-      isClosingRef.current = false;
-      setIsRendered(true);
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, 20);
-      return () => clearTimeout(timer);
-    } else {
-      setIsVisible(false);
+    } else if (isRendered && !isClosing) {
+      // Si isOpen pasa a false desde el exterior, ejecutar la animación de salida suave antes de desmontar
+      setIsClosing(true);
       const timer = setTimeout(() => {
         setIsRendered(false);
-      }, 300);
+        setIsClosing(false);
+      }, 220);
       return () => clearTimeout(timer);
     }
   }, [isOpen, isDeploying]);
 
   // Cierre animado suave
   const handleSmoothClose = () => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
-    setIsVisible(false);
+    if (isClosing) return;
+    setIsClosing(true);
     setTimeout(() => {
       onClose();
       setIsRendered(false);
-      isClosingRef.current = false;
-    }, 280);
+      setIsClosing(false);
+    }, 220);
   };
 
   // Helper para verificar con precisión si unas coordenadas tocan dentro de la imagen activa
@@ -278,27 +267,32 @@ export const PhotoCarouselModal = ({
           }
         }
       }}
-      style={{
-        opacity: deployProgress,
-        pointerEvents: isVisible || isDeploying ? "auto" : "none"
-      }}
+      style={isDeploying ? { opacity: deployProgress } : undefined}
       className={`fixed inset-0 z-[9999] h-[100dvh] w-full bg-slate-950/98 backdrop-blur-2xl flex flex-col justify-between overflow-hidden select-none ${
-        isDeploying ? "" : "transition-opacity duration-300 ease-out"
+        isDeploying
+          ? ""
+          : isClosing
+          ? "animate-lightbox-backdrop-out"
+          : "animate-lightbox-backdrop-in"
       }`}
     >
       {/* 1. Cabecera fija superior */}
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          opacity: deployProgress,
-          transform: isDeploying
-            ? `translateY(${(1 - deployProgress) * -35}px)`
-            : isVisible
-            ? "translateY(0)"
-            : "translateY(-16px)"
-        }}
+        style={
+          isDeploying
+            ? {
+                opacity: deployProgress,
+                transform: `translateY(${(1 - deployProgress) * -35}px)`
+              }
+            : undefined
+        }
         className={`flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-800/80 bg-slate-950/80 ${
-          isDeploying ? "" : "transition-all duration-300 ease-out"
+          isDeploying
+            ? ""
+            : isClosing
+            ? "animate-lightbox-header-out"
+            : "animate-lightbox-header-in"
         }`}
       >
         <div className="flex items-center gap-2 min-w-0 pr-2">
@@ -350,16 +344,20 @@ export const PhotoCarouselModal = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        style={{
-          opacity: isDeploying ? Math.min(1, deployProgress * 1.3) : (isVisible ? 1 : 0),
-          transform: isDeploying
-            ? `translate3d(0, ${deployOffsetY * 0.35}px, 0) scale(${0.82 + deployProgress * 0.18})`
-            : isVisible
-            ? "scale(1) translate3d(0, 0, 0)"
-            : "scale(0.95) translate3d(0, 0, 0)"
-        }}
+        style={
+          isDeploying
+            ? {
+                opacity: Math.min(1, deployProgress * 1.3),
+                transform: `translate3d(0, ${deployOffsetY * 0.35}px, 0) scale(${0.82 + deployProgress * 0.18})`
+              }
+            : undefined
+        }
         className={`flex-1 min-h-0 flex items-center justify-center relative overflow-hidden touch-pan-y cursor-grab active:cursor-grabbing select-none ${
-          isDeploying ? "" : "transition-all duration-300 ease-out"
+          isDeploying
+            ? ""
+            : isClosing
+            ? "animate-lightbox-image-out"
+            : "animate-lightbox-image-in"
         }`}
       >
         {/* Contenedor tipo cinta continua con animación suave */}
@@ -389,7 +387,7 @@ export const PhotoCarouselModal = ({
                 onPointerDown={() => {
                   startedOnImageRef.current = true;
                 }}
-                className={`max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800/80 pointer-events-auto select-none transition-transform duration-300 ${
+                className={`max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800/80 pointer-events-auto select-none ${
                   readOnly
                     ? "max-h-[68dvh] sm:max-h-[78dvh]"
                     : "max-h-[46dvh] sm:max-h-[56dvh]"
@@ -445,16 +443,20 @@ export const PhotoCarouselModal = ({
         photos.length > 1 && (
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              opacity: deployProgress,
-              transform: isDeploying
-                ? `translateY(${(1 - deployProgress) * 35}px)`
-                : isVisible
-                ? "translateY(0)"
-                : "translateY(16px)"
-            }}
+            style={
+              isDeploying
+                ? {
+                    opacity: deployProgress,
+                    transform: `translateY(${(1 - deployProgress) * 35}px)`
+                  }
+                : undefined
+            }
             className={`px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 ${
-              isDeploying ? "" : "transition-all duration-300 ease-out"
+              isDeploying
+                ? ""
+                : isClosing
+                ? "animate-lightbox-footer-out"
+                : "animate-lightbox-footer-in"
             }`}
           >
             <div
@@ -488,8 +490,8 @@ export const PhotoCarouselModal = ({
       ) : (
         <div
           onClick={(e) => e.stopPropagation()}
-          className={`px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 space-y-2.5 transition-all duration-300 ease-out ${
-            isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+          className={`px-4 pb-4 pt-2.5 border-t border-slate-800/80 bg-slate-950/90 space-y-2.5 ${
+            isClosing ? "animate-lightbox-footer-out" : "animate-lightbox-footer-in"
           }`}
         >
           {/* Botones de acción directos (altura táctil estándar min-h-[44px]) */}

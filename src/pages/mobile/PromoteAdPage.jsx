@@ -53,6 +53,19 @@ export const PromoteAdPage = () => {
     setProduct(getProductById(id));
   }, [id]);
 
+  // Si el usuario es invitado, solicitar inicio de sesión o registro al entrar
+  useEffect(() => {
+    if (!currentUser) {
+      navigate("/login", {
+        replace: true,
+        state: {
+          from: { pathname: `/promote-ad/${id}` },
+          message: "Inicia sesión o regístrate para destacar esta publicación."
+        }
+      });
+    }
+  }, [currentUser, navigate, id]);
+
   // Si el anuncio no existe
   if (!product) {
     return (
@@ -121,6 +134,9 @@ export const PromoteAdPage = () => {
       });
 
       if (order.success && order.value) {
+        // Pausa breve para una transición visual suave hacia la pasarela
+        await new Promise((resolve) => setTimeout(resolve, 600));
+
         // Redirigir a la URL oficial de cobro provista por Pagadito
         if (order.value.startsWith("http://") || order.value.startsWith("https://")) {
           if (order.value.startsWith(window.location.origin)) {
@@ -136,9 +152,8 @@ export const PromoteAdPage = () => {
         throw new Error(order.message || "No se pudo generar la orden de cobro con Pagadito.");
       }
     } catch (err) {
-      alert("Error al conectar con la pasarela de pago: " + err.message);
-    } finally {
       setIsProcessing(false);
+      alert("Error al conectar con la pasarela de pago: " + err.message);
     }
   };
 
@@ -313,7 +328,7 @@ export const PromoteAdPage = () => {
           </span>
         </div>
 
-        {/* Botón oficial: Pago con Tarjeta vía Pagadito */}
+        {/* Botón oficial: Pagar con tarjeta de crédito/débito */}
         <button
           type="button"
           disabled={isProcessing}
@@ -324,15 +339,9 @@ export const PromoteAdPage = () => {
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
               <CreditCard className="w-5 h-5" />
             </div>
-            <div>
-              <div className="text-xs font-bold text-amber-300 group-hover:text-amber-200 transition-colors flex items-center gap-1.5">
-                <span>Pago con tarjeta</span>
-                <span className="text-[10px] text-slate-400 font-normal">vía Pagadito</span>
-              </div>
-              <div className="text-[10px] text-slate-400">
-                Crédito o débito (Visa, Mastercard) · Acreditación inmediata
-              </div>
-            </div>
+            <span className="text-xs font-bold text-amber-300 group-hover:text-amber-200 transition-colors">
+              Pagar con tarjeta de crédito/débito
+            </span>
           </div>
           {isProcessing ? (
             <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
@@ -341,6 +350,20 @@ export const PromoteAdPage = () => {
           )}
         </button>
       </div>
+
+      {/* Transición suave hacia el carrito de Pagadito */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-backdrop-enter transition-all">
+          <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mb-4 shadow-xl shadow-amber-500/20 animate-pulse">
+            <CreditCard className="w-8 h-8" />
+          </div>
+          <div className="text-sm font-bold text-white mb-1.5">Conectando con la pasarela...</div>
+          <div className="text-xs text-slate-400 max-w-xs leading-relaxed">
+            Abriendo el carrito de cobro seguro de Pagadito
+          </div>
+          <div className="mt-5 w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
     </div>
   );
 };

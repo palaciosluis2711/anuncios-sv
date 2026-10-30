@@ -1,8 +1,7 @@
 // Detalle exhaustivo de una publicación de clasificado en AnunciosSV
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
-  Heart,
   MapPin,
   Clock,
   Eye,
@@ -21,23 +20,25 @@ import {
   Star,
   Maximize2,
   SlidersHorizontal,
-  Mail
+  Mail,
+  AlertCircle,
+  X,
+  User
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { PhotoCarouselModal } from "../../components/mobile/PhotoCarouselModal";
 import { MOCK_PRODUCTS, DELIVERY_OPTIONS } from "../../services/mockData";
 import {
   getProductById,
-  isProductFavorite,
-  toggleFavoriteProduct,
   isProductOwner,
   formatProductPrice,
   getCleanWhatsappNumber,
-  FAVORITES_EVENT
+  UPDATE_EVENT
 } from "../../services/productsService";
 import { getPublicProfile, PROFILE_UPDATED_EVENT } from "../../services/userProfileService";
 import { getOrCreateConversation } from "../../services/chatService";
 import { formatPublicationTime } from "../../components/mobile/ProductCard";
+import { getSellerRatingStats, RATING_UPDATED_EVENT } from "../../services/reputationService";
 
 const DELIVERY_ICONS = {
   public_place: MapPin,
@@ -52,6 +53,42 @@ export const ProductDetailPage = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { currentUser, requireAuth } = useAuth();
+
+  // Banner informativo cuando el usuario cancela la pasarela de pago
+  const [showCancelledBanner, setShowCancelledBanner] = useState(false);
+  const [isBannerFading, setIsBannerFading] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.paymentCancelled || searchParams.get("cancelled") === "true") {
+      setShowCancelledBanner(true);
+      setIsBannerFading(false);
+      if (searchParams.get("cancelled") || location.state?.paymentCancelled) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("cancelled");
+        const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : "";
+        navigate(`${location.pathname}${nextSearch}`, { replace: true, state: {} });
+      }
+    }
+  }, [location.state, searchParams, navigate, location.pathname]);
+
+  // Desaparición automática y suave de la notificación tras 4 segundos
+  useEffect(() => {
+    if (showCancelledBanner) {
+      const fadeTimer = setTimeout(() => {
+        setIsBannerFading(true);
+      }, 3500);
+
+      const hideTimer = setTimeout(() => {
+        setShowCancelledBanner(false);
+        setIsBannerFading(false);
+      }, 4000);
+
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(hideTimer);
+      };
+    }
+  }, [showCancelledBanner]);
 
   // Control de retorno e información de la procedencia
   const isFromChat = Boolean(
@@ -97,15 +134,15 @@ export const ProductDetailPage = () => {
   };
 
   // Obtener producto del servicio centralizado o fallback de mockData
-  const product = getProductById(id) || MOCK_PRODUCTS.find((p) => String(p.id) === String(id)) || MOCK_PRODUCTS[0];
+  const product = getProductById(id) || MOCK_PRODUCTS.find((p) => String(p.id) === String(id)) || null;
 
   // Identificar si el usuario actual es el dueño del anuncio
-  const isOwner = currentUser && isProductOwner(product, currentUser);
+  const isOwner = Boolean(currentUser && product && isProductOwner(product, currentUser));
 
   // Galería de imágenes (soporta array de fotos múltiples o foto única)
-  const imagesList = Array.isArray(product.images) && product.images.length > 0
+  const imagesList = product && Array.isArray(product.images) && product.images.length > 0
     ? product.images
-    : [product.image || "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=800&q=80"];
+    : (product?.image ? [product.image] : ["https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=800&q=80"]);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -130,12 +167,56 @@ export const ProductDetailPage = () => {
     offsetY: 0
   });
 
+  // Funciones seguras y sincronizadas para abrir y cerrar el visualizador de imagen completa
+  const isClosingViewerRef = useRef(false);
+
+  const handleOpenViewer = useCallback((index = activeImageIndex) => {
+    setActiveImageIndex(index);
+    setInteractiveDeploy({
+      isDeploying: false,
+      progress: 0,
+      offsetY: 0
+    });
+    window.history.pushState({ modal: "photo-viewer" }, "");
+    setIsViewerOpen(true);
+  }, [activeImageIndex]);
+
+  const handleCloseViewer = useCallback(() => {
+    setIsViewerOpen(false);
+    setInteractiveDeploy({
+      isDeploying: false,
+      progress: 0,
+      offsetY: 0
+    });
+    if (window.history.state?.modal === "photo-viewer") {
+      isClosingViewerRef.current = true;
+      window.history.back();
+    }
+  }, []);
+
+  // Sincronizar el botón de retorno físico o gesto táctil atrás del móvil para cerrar el visor suavemente
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isClosingViewerRef.current) {
+        isClosingViewerRef.current = false;
+        return;
+      }
+      if (isViewerOpen) {
+        setIsViewerOpen(false);
+        setInteractiveDeploy({
+          isDeploying: false,
+          progress: 0,
+          offsetY: 0
+        });
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isViewerOpen]);
+
   // Información formateada de precio (soporta fijo, rango, alquiler y solicitar por mensaje)
   const priceInfo = formatProductPrice(product);
-
-  // Estado reactivo de favorito sincronizado globalmente
-  const [isLiked, setIsLiked] = useState(() => isProductFavorite(product.id, currentUser));
-  const [likesCount, setLikesCount] = useState(product.likesCount || 0);
 
   // Desactivar el pull-to-refresh nativo del navegador en esta pantalla para priorizar el gesto de la portada
   useEffect(() => {
@@ -160,48 +241,79 @@ export const ProductDetailPage = () => {
   const [, setProfileUpdateTick] = useState(0);
 
   useEffect(() => {
-    setIsLiked(isProductFavorite(product.id, currentUser));
-    setLikesCount(product.likesCount || 0);
-
-    const handleFavUpdate = (e) => {
-      if (String(e.detail?.productId) === String(product.id)) {
-        setIsLiked(Boolean(e.detail.isFavorite));
-        if (typeof e.detail.likesCount === "number") {
-          setLikesCount(e.detail.likesCount);
-        }
-      }
-    };
-
     const handleProfileUpdate = () => {
       setProfileUpdateTick((prev) => prev + 1);
     };
 
-    window.addEventListener(FAVORITES_EVENT, handleFavUpdate);
-    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
-    return () => {
-      window.removeEventListener(FAVORITES_EVENT, handleFavUpdate);
-      window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
+    const handleProductsUpdate = () => {
+      setProfileUpdateTick((prev) => prev + 1);
     };
-  }, [product.id, product.likesCount, currentUser]);
 
-  const sellerProfile = getPublicProfile(product.seller?.id || product.seller?.username || product.seller?.name);
-  const sellerAvatar = sellerProfile?.avatar || product.seller?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80";
-  const sellerName = sellerProfile?.displayName || sellerProfile?.name || product.seller?.name || "Vendedor";
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
+    window.addEventListener(UPDATE_EVENT, handleProductsUpdate);
+    return () => {
+      window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdate);
+      window.removeEventListener(UPDATE_EVENT, handleProductsUpdate);
+    };
+  }, [product?.id, currentUser]);
 
-  const handleToggleFavorite = () => {
-    // Requerir inicio de sesión con diálogo de confirmación interactivo
-    requireAuth(
-      () => {
-        const res = toggleFavoriteProduct(product.id, currentUser);
-        setIsLiked(res.isFavorite);
-        setLikesCount(res.likesCount);
-      },
-      {
-        actionType: "like",
-        title: "¿Guardar en tus favoritos?",
-        message: "Inicia sesión para poder guardar este anuncio en tus favoritos y consultarlo cuando quieras."
+  const sellerProfile = getPublicProfile(product?.seller?.id || product?.seller?.username || product?.seller?.name);
+  const sellerAvatar = sellerProfile?.avatar || product?.seller?.avatar || null;
+  const sellerName = sellerProfile?.displayName || sellerProfile?.name || product?.seller?.name || "Vendedor";
+
+  // Estadísticas reactivas de reputación del vendedor (utilizando valores primitivos estables para evitar re-renders)
+  const sellerKey = String(product?.seller?.id || product?.seller?.username || product?.seller?.name || "").trim();
+  const [sellerRatingStats, setSellerRatingStats] = useState(() =>
+    getSellerRatingStats(
+      sellerKey,
+      product?.seller?.rating,
+      product?.seller?.reviewsCount
+    )
+  );
+
+  useEffect(() => {
+    const handleRatingUpdate = () => {
+      setSellerRatingStats(
+        getSellerRatingStats(
+          sellerKey,
+          product.seller?.rating,
+          product.seller?.reviewsCount
+        )
+      );
+    };
+
+    window.addEventListener(RATING_UPDATED_EVENT, handleRatingUpdate);
+    return () => window.removeEventListener(RATING_UPDATED_EVENT, handleRatingUpdate);
+  }, [sellerKey, product.seller?.rating, product.seller?.reviewsCount]);
+
+  // Navegación directa y garantizada al perfil público del vendedor
+  const handleGoToSeller = () => {
+    const targetSellerId = product.seller?.id || product.seller?.username || product.seller?.name || "vendedor";
+    const targetPath = `/seller/${encodeURIComponent(targetSellerId)}${
+      isFromChat
+        ? `?from=chat${chatId ? `&chatId=${encodeURIComponent(chatId)}` : ""}`
+        : `?from=product&productId=${encodeURIComponent(product.id)}`
+    }`;
+    navigate(targetPath, {
+      state: {
+        fromChat: isFromChat,
+        chatPath: chatPath,
+        chatId: chatId,
+        fromProduct: !isFromChat,
+        productPath: location.pathname + location.search,
+        productId: product.id,
+        sellerData: {
+          id: product.seller?.id || targetSellerId,
+          name: sellerName,
+          avatar: sellerAvatar,
+          username: product.seller?.username,
+          rating: sellerRatingStats.average,
+          reviewsCount: sellerRatingStats.count,
+          verified: Boolean(product.seller?.verified),
+          location: product.location || product.exactLocation
+        }
       }
-    );
+    });
   };
 
   const handleNextImage = () => {
@@ -321,19 +433,14 @@ export const ProductDetailPage = () => {
     const elapsed = Date.now() - startTimeRef.current;
     const lockedDir = directionLockedRef.current;
 
-    // 1. Si fue un tap o clic sin desplazamiento: abrir visualizador modal
+    // 1. Si fue un tap o clic sin desplazamiento: abrir visualizador modal con transición suave
     if (Math.abs(diffX) < 8 && Math.abs(diffY) < 8 && elapsed < 350) {
       currentOffsetRef.current = 0;
       currentOffsetYRef.current = 0;
       setDragOffset(0);
       setDragOffsetY(0);
       directionLockedRef.current = null;
-      setInteractiveDeploy({
-        isDeploying: false,
-        progress: 0,
-        offsetY: 0
-      });
-      setIsViewerOpen(true);
+      handleOpenViewer(activeImageIndex);
       return;
     }
 
@@ -343,17 +450,12 @@ export const ProductDetailPage = () => {
       const isPastDownThreshold = diffY > 40;
 
       if (isDownFlick || isPastDownThreshold) {
-        setInteractiveDeploy({
-          isDeploying: false,
-          progress: 1,
-          offsetY: 0
-        });
-        setIsViewerOpen(true);
         currentOffsetRef.current = 0;
         currentOffsetYRef.current = 0;
         setDragOffset(0);
         setDragOffsetY(0);
         directionLockedRef.current = null;
+        handleOpenViewer(activeImageIndex);
         return;
       } else {
         // Cancelar despliegue y replegar suavemente
@@ -479,13 +581,76 @@ export const ProductDetailPage = () => {
     );
   };
 
+  const handlePromoteAd = () => {
+    // Requerir inicio de sesión o registro para destacar el anuncio
+    requireAuth(
+      () => {
+        navigate(`/promote-ad/${product.id}`, { state: { from: `/product/${product.id}` } });
+      },
+      {
+        actionType: "promote",
+        title: "¿Deseas destacar este anuncio?",
+        message: "Inicia sesión o regístrate en AnunciosSV para destacar esta publicación y posicionarla sobre los demás anuncios en el feed."
+      }
+    );
+  };
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-4">
+          <AlertCircle className="w-8 h-8 text-amber-400" />
+        </div>
+        <h2 className="text-lg font-bold text-white mb-1">Publicación no encontrada</h2>
+        <p className="text-xs text-slate-400 max-w-xs mb-6">
+          Este anuncio no existe o aún no hay publicaciones registradas en la plataforma.
+        </p>
+        <button
+          onClick={() => navigate("/")}
+          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/30"
+        >
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       onTouchStart={handlePageTouchStart}
       onTouchEnd={handlePageTouchEnd}
       style={{ overscrollBehaviorY: "contain" }}
-      className="space-y-4 pb-8 animate-fade-in select-none overscroll-y-contain"
+      className="space-y-4 pb-8 select-none overscroll-y-contain animate-page-enter"
     >
+      {/* Banner de notificación cuando la transacción fue cancelada */}
+      {showCancelledBanner && (
+        <div
+          className={`px-4 pt-3 transition-all duration-500 ease-in-out ${
+            isBannerFading ? "opacity-0 -translate-y-2 pointer-events-none" : "opacity-100 translate-y-0"
+          }`}
+        >
+          <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span className="font-semibold text-amber-100">
+                La transacción fue cancelada por el usuario
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsBannerFading(true);
+                setTimeout(() => setShowCancelledBanner(false), 300);
+              }}
+              className="p-1 rounded-lg text-slate-400 hover:text-amber-200 hover:bg-amber-500/20 transition-all flex-shrink-0"
+              aria-label="Cerrar notificación"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Galería de Fotos Interactiva con Navegación Táctil Deslizable y Miniaturas */}
       <div className="relative bg-slate-950 select-none">
         <div
@@ -538,26 +703,6 @@ export const ProductDetailPage = () => {
             </div>
           )}
 
-          {/* Botón flotante sobre la foto (Favorito) */}
-          <div
-            className="absolute top-3 right-3 z-10"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={handleToggleFavorite}
-              aria-label={isLiked ? "Quitar de favoritos" : "Guardar en favoritos"}
-              className={`p-2.5 rounded-full backdrop-blur-md transition-all active:scale-90 shadow-md ${
-                isLiked
-                  ? "bg-rose-500 text-white shadow-rose-500/40 ring-2 ring-rose-400/40"
-                  : "bg-slate-950/70 text-slate-200 hover:text-white hover:bg-slate-950/90"
-              }`}
-            >
-              <Heart className={`w-4.5 h-4.5 transition-transform ${isLiked ? "fill-white scale-110" : ""}`} />
-            </button>
-          </div>
-
           {/* Flechas de navegación para múltiples fotos */}
           {imagesList.length > 1 && (
             <>
@@ -595,7 +740,7 @@ export const ProductDetailPage = () => {
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              setIsViewerOpen(true);
+              handleOpenViewer(activeImageIndex);
             }}
           >
             {imagesList.length > 1 && (
@@ -673,16 +818,11 @@ export const ProductDetailPage = () => {
 
         {/* Bloque de Precio, Modalidades y Condiciones */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md space-y-3">
-          {/* Fila 1: Encabezado con Etiqueta y Contador de Me Gusta */}
-          <div className="flex items-center justify-between gap-2">
+          {/* Fila 1: Encabezado con Etiqueta de Precio */}
+          <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               {priceInfo.isContact ? "Modalidad de Precio" : priceInfo.isRange ? "Rango de Precios" : "Precio"}
             </span>
-
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60 flex-shrink-0">
-              <Heart className={`w-3.5 h-3.5 ${isLiked ? "fill-rose-500 text-rose-500" : "text-slate-500"}`} />
-              <span>{likesCount} {likesCount === 1 ? "me gusta" : "me gusta"}</span>
-            </div>
           </div>
 
           {/* Fila 2: Visualización del Monto / Precio Principal con espacio completo */}
@@ -905,33 +1045,36 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* 8. Tarjeta del Vendedor (enlace directo a su perfil completo) */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-md">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleGoToSeller}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleGoToSeller();
+            }
+          }}
+          className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-md cursor-pointer hover:border-slate-700 active:scale-[0.99] transition-all group"
+          title="Toca para ver el perfil completo del vendedor"
+        >
           <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
             Publicado por
           </div>
 
-          <Link
-            to={`/seller/${encodeURIComponent(product.seller?.id || product.seller?.name || "vendedor")}${
-              isFromChat
-                ? `?from=chat${chatId ? `&chatId=${encodeURIComponent(chatId)}` : ""}`
-                : `?from=product&productId=${encodeURIComponent(product.id)}`
-            }`}
-            state={{
-              fromChat: isFromChat,
-              chatPath: chatPath,
-              chatId: chatId,
-              fromProduct: !isFromChat,
-              productPath: location.pathname + location.search,
-              productId: product.id
-            }}
-            className="flex items-center justify-between gap-3 group active:scale-[0.99] transition-all"
-          >
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <img
-                src={sellerAvatar}
-                alt={sellerName}
-                className="w-12 h-12 rounded-full object-cover border-2 border-slate-700 group-hover:border-indigo-500 transition-colors flex-shrink-0"
-              />
+              {sellerAvatar ? (
+                <img
+                  src={sellerAvatar}
+                  alt={sellerName}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-slate-700 group-hover:border-indigo-500 transition-colors flex-shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <User className="w-6 h-6 text-slate-400" />
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-bold text-white truncate group-hover:text-indigo-300 transition-colors">
@@ -948,8 +1091,8 @@ export const ProductDetailPage = () => {
                 </div>
                 <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                   <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span className="font-bold text-slate-200">{product.seller?.rating || 5.0}</span>
-                  <span>· {product.seller?.reviewsCount || 0} opiniones</span>
+                  <span className="font-bold text-slate-200">{sellerRatingStats.average}</span>
+                  <span>· {sellerRatingStats.count} {sellerRatingStats.count === 1 ? "opinión" : "opiniones"}</span>
                 </div>
               </div>
             </div>
@@ -962,7 +1105,7 @@ export const ProductDetailPage = () => {
               )}
               <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
             </div>
-          </Link>
+          </div>
         </div>
 
         {/* 9. Botón de Acción Directa: Gestionar anuncio si es el dueño o Contactar al vendedor si es comprador */}
@@ -1040,15 +1183,17 @@ export const ProductDetailPage = () => {
             </div>
           )}
 
-          {/* Botón Destacar anuncio (visible en todos los anuncios, tanto de dueño como de terceros) */}
-          <button
-            type="button"
-            onClick={() => navigate(`/promote-ad/${product.id}`, { state: { from: `/product/${product.id}` } })}
-            className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/25 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 hover:border-amber-400/70 text-amber-300 hover:text-amber-200 font-extrabold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-4.5 h-4.5 text-amber-400 fill-amber-400" />
-            <span>Destacar anuncio</span>
-          </button>
+          {/* Botón Destacar anuncio (visible únicamente si la publicación no ha sido destacada) */}
+          {!product.featured && (
+            <button
+              type="button"
+              onClick={handlePromoteAd}
+              className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/25 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 hover:border-amber-400/70 text-amber-300 hover:text-amber-200 font-extrabold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4.5 h-4.5 text-amber-400 fill-amber-400" />
+              <span>Destacar anuncio</span>
+            </button>
+          )}
         </div>
 
         {/* 10. Consejos de Seguridad para Compradores en El Salvador */}
@@ -1066,10 +1211,7 @@ export const ProductDetailPage = () => {
       {/* Visualizador modal de imagen completa (Lightbox interactivo y suave) */}
       <PhotoCarouselModal
         isOpen={isViewerOpen}
-        onClose={() => {
-          setIsViewerOpen(false);
-          setInteractiveDeploy({ isDeploying: false, progress: 0, offsetY: 0 });
-        }}
+        onClose={handleCloseViewer}
         photos={imagesList}
         activeIndex={activeImageIndex}
         onSelectIndex={setActiveImageIndex}

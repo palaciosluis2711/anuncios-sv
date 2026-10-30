@@ -10,7 +10,9 @@ import {
   Trash2,
   CheckCircle2,
   AlertTriangle,
-  Star
+  Star,
+  X,
+  Clock
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -47,6 +49,7 @@ export const ManageProductPage = () => {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCancelPromotionModal, setShowCancelPromotionModal] = useState(false);
 
   // Retorno seguro y directo a Perfil > Mis Anuncios
   const handleReturnToProfile = useCallback(() => {
@@ -194,22 +197,28 @@ export const ManageProductPage = () => {
     }
   };
 
-  // 2. Alternar Destacado (Demo interactiva de promoción)
-  const handleToggleFeatured = async () => {
+  // 2. Cancelar la promoción (destaque) del anuncio definitivamente
+  const handleConfirmCancelPromotion = async () => {
     setLoading(true);
     try {
       const updated = await updateProduct(product.id, {
-        featured: !product.featured
+        featured: false,
+        featuredTimestamp: null,
+        featuredExpiresAt: null,
+        featuredDays: null,
+        promotedAt: null,
+        promotedDays: null,
+        promotedPrice: null,
+        promotedBuyerEmail: null,
+        promotedErn: null,
+        promotedReference: null
       });
       setProduct(updated);
-      setStatusMessage(
-        updated.featured
-          ? "¡Insignia de Destacado activada! Tu anuncio resalta con distintivo especial."
-          : "Se ha desactivado la insignia de Destacado para este anuncio."
-      );
+      setShowCancelPromotionModal(false);
+      setStatusMessage("Se ha eliminado el destacado del anuncio. Tu publicación sigue activa con normalidad.");
       setTimeout(() => setStatusMessage(null), 5000);
     } catch (err) {
-      alert("Error al actualizar promoción: " + err.message);
+      alert("Error al cancelar la promoción: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -420,40 +429,60 @@ export const ManageProductPage = () => {
           </button>
         </div>
 
-        {/* 3. Opción: Gestionar Promoción del Anuncio */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-indigo-500/30 space-y-3 shadow-lg">
+        {/* 3. Opción: Destacar anuncio / Cancelar destaque */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20 border border-amber-500/30 space-y-3 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-5 h-5" />
+              <Sparkles className="w-5 h-5 fill-amber-400/20" />
             </div>
 
-            <div className="flex-1 min-w-0 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Promoción y Visibilidad</h4>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Próximamente
-              </span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-white">Destacar anuncio</h4>
+              <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
+                {product.featured
+                  ? "Esta publicación cuenta con halo dorado y posicionamiento preferente"
+                  : "Aumenta el alcance de tu anuncio colocándolo en la cima del feed"}
+              </p>
             </div>
           </div>
 
-          {/* Selector de prueba rápida de insignia destacada */}
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-300 font-semibold flex items-center gap-1.5">
-              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              Insignia Destacado VIP (Demo)
-            </span>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleToggleFeatured}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                product.featured
-                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
-            >
-              {product.featured ? "Activo ✓" : "Activar"}
-            </button>
-          </div>
+          {product.featured ? (
+            /* Si el anuncio ya está destacado: solo botón para cancelar la promoción */
+            <div className="space-y-2 pt-1">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 fill-current" />
+                  Actualmente destacado
+                </span>
+                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-200 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  Activo
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setShowCancelPromotionModal(true)}
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white font-bold text-xs border border-rose-500/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancelar destaque</span>
+              </button>
+            </div>
+          ) : (
+            /* En anuncios no destacados: solo botón para destacar */
+            <div className="pt-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => navigate(`/promote-ad/${product.id}`, { state: { from: `/manage-product/${product.id}` } })}
+                className="w-full min-h-[46px] py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/25 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 fill-current" />
+                <span>Destacar anuncio</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 4. Opción: Eliminar Anuncio (Zona de Peligro) */}
@@ -479,10 +508,50 @@ export const ManageProductPage = () => {
         </div>
       </div>
 
+      {/* Modal de Confirmación para Cancelar Destaque */}
+      {showCancelPromotionModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-backdrop-enter">
+          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl animate-scale-up text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base font-bold text-white">¿Cancelar el destacado de este anuncio?</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Se va a <strong className="text-white">eliminar el destacado</strong> (halo dorado y posicionamiento preferente), <strong className="text-emerald-400">mas no se eliminará tu anuncio</strong>.
+              </p>
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-amber-400 font-medium">
+                ⚠️ Ten en cuenta que esta acción no se puede revertir.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setShowCancelPromotionModal(false)}
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all active:scale-[0.99]"
+              >
+                No, mantener
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleConfirmCancelPromotion}
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+              >
+                {loading ? "Cancelando..." : "Sí, eliminar destacado"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Confirmación para Eliminar Anuncio */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl text-center">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-backdrop-enter">
+          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl animate-scale-up text-center">
             <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-7 h-7" />
             </div>

@@ -271,7 +271,7 @@ export const AuthProvider = ({ children }) => {
           name: `@${cleanUsername}`,
           email: cleanEmail,
           role: cleanUsername.toLowerCase() === "admin" || cleanEmail.includes("admin") ? "admin" : "user",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+          avatar: null, // Cuenta nueva inicia sin foto de perfil para que el usuario la configure
           status: "activo"
         };
         setCurrentUser(mockUser);
@@ -282,12 +282,13 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const user = userCredential.user;
 
-      const defaultAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80";
+      // Cuenta nueva: el avatar por defecto está vacío
+      const defaultAvatar = null;
 
       // Actualizar display name con el nombre de usuario
       await updateProfile(user, {
         displayName: `@${cleanUsername}`,
-        photoURL: defaultAvatar
+        photoURL: ""
       });
 
       const role = cleanUsername.toLowerCase() === "admin" || cleanEmail.includes("admin") ? "admin" : "user";
@@ -311,7 +312,7 @@ export const AuthProvider = ({ children }) => {
         name: `@${cleanUsername}`,
         email: cleanEmail,
         role: role,
-        avatar: defaultAvatar,
+        avatar: null, // Sin foto de perfil por defecto
         status: "activo",
         joinedDate: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }),
         postsCount: 0,
@@ -492,7 +493,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 6. Alternar roles de prueba desde el simulador
+  // 6. Alternar roles desde el simulador (Webmaster o Invitado)
   const switchDemoRole = (targetRole) => {
     setLoading(true);
     setTimeout(() => {
@@ -503,26 +504,14 @@ export const AuthProvider = ({ children }) => {
           username: "admin",
           name: cachedAdmin?.displayName || cachedAdmin?.name || "@admin",
           displayName: cachedAdmin?.displayName || "@admin",
-          avatar: cachedAdmin?.avatar || MOCK_USERS[0].avatar,
-          phone: cachedAdmin?.phone || MOCK_USERS[0].phone || "",
+          avatar: cachedAdmin?.avatar || MOCK_USERS[0]?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+          phone: cachedAdmin?.phone || MOCK_USERS[0]?.phone || "",
           isDemoUser: true
         };
         setCurrentUser(demoAdmin);
         localStorage.setItem("mercadosocial_user", JSON.stringify(demoAdmin));
-      } else if (targetRole === "user") {
-        const cachedUser = getPublicProfile("usr-01");
-        const demoUser = {
-          ...MOCK_USERS[1],
-          username: "carlos_m",
-          name: cachedUser?.displayName || cachedUser?.name || "@carlos_m",
-          displayName: cachedUser?.displayName || "@carlos_m",
-          avatar: cachedUser?.avatar || MOCK_USERS[1].avatar,
-          phone: cachedUser?.phone || MOCK_USERS[1].phone || "",
-          isDemoUser: true
-        };
-        setCurrentUser(demoUser);
-        localStorage.setItem("mercadosocial_user", JSON.stringify(demoUser));
       } else {
+        // Modo Invitado: navegación pública sin credenciales
         setCurrentUser(null);
         localStorage.removeItem("mercadosocial_user");
       }

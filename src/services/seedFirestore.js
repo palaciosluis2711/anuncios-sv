@@ -24,8 +24,7 @@ export const seedFirestoreDatabase = async (onProgress) => {
     const usernameMap = {
       "usr-admin": "admin",
       "usr-01": "carlos_m",
-      "usr-02": "vivasol",
-      "usr-spammer": "spam_bot"
+      "usr-02": "vivasol"
     };
 
     for (const user of MOCK_USERS) {

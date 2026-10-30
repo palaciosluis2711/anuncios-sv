@@ -57,7 +57,9 @@ export const getPagaditoCredentials = () => {
 const getStoredTransactions = () => {
   try {
     const raw = localStorage.getItem(PAGADITO_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch (err) {
     console.error("Error al leer transacciones de Pagadito en localStorage:", err);
     return {};

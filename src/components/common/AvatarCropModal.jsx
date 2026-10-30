@@ -1,5 +1,6 @@
 // Modal interactivo para recortar y encuadrar la foto de perfil antes de subirla
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, Check, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 
 export const AvatarCropModal = ({
@@ -40,6 +41,29 @@ export const AvatarCropModal = ({
       });
     };
   }, [isOpen, imageSrc]);
+
+  // Bloquear el scroll de la página de fondo mientras el modal esté abierto y gestionar tecla Escape
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.overscrollBehavior = originalOverscroll;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   // Escala base para que la dimensión menor de la imagen siempre cubra el área circular
   const minSide = Math.min(naturalSize.width || 1, naturalSize.height || 1);
@@ -163,9 +187,19 @@ export const AvatarCropModal = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-      <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-5 space-y-4 shadow-2xl animate-scale-up overflow-hidden">
+  return createPortal(
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[9999] h-[100dvh] max-h-[100dvh] w-full bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-hidden overscroll-none select-none animate-backdrop-enter"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[360px] rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-5 space-y-3 sm:space-y-4 shadow-2xl animate-scale-up overflow-hidden"
+      >
         {/* Cabecera del modal */}
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <h3 className="text-sm font-bold text-white">Encuadrar Foto de Perfil</h3>
@@ -266,7 +300,8 @@ export const AvatarCropModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

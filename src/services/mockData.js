@@ -118,197 +118,10 @@ export const PUBLICATION_HIERARCHY = [
   }
 ];
 
-export const MOCK_PRODUCTS = [
-  {
-    id: "prod-101",
-    title: "MacBook Pro M2 14\" - 16GB / 512GB Impecable",
-    price: 1350,
-    currency: "USD",
-    mainCategory: "producto",
-    mainCategoryName: "Producto",
-    subcategory: "tech",
-    subcategoryName: "Tecnología y Celulares",
-    category: "tech",
-    categoryName: "Tecnología y Celulares",
-    department: "San Salvador",
-    location: "San Salvador, El Salvador",
-    image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80",
-    description: "MacBook Pro en condición excelente, batería con 96% de salud. Se entrega con cargador MagSafe original y caja.",
-    likesCount: 38,
-    isLiked: false,
-    viewsCount: 412,
-    createdAt: "Hace 2 horas",
-    publishedTimestamp: 1730000000000,
-    featuredTimestamp: 1730000000000,
-    status: "aprobado", // aprobado | pendiente | rechazado
-    featured: true,
-    seller: {
-      id: "usr-01",
-      name: "Carlos Méndez",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-      rating: 4.9,
-      reviewsCount: 24,
-      verified: true
-    }
-  },
-  {
-    id: "prod-102",
-    title: "Apartamento Céntrico 2 Habitaciones con Terraza",
-    price: 950,
-    currency: "USD/mes",
-    mainCategory: "alquiler",
-    mainCategoryName: "Alquiler",
-    subcategory: "rent_real_estate",
-    subcategoryName: "Casas y Apartamentos",
-    category: "rent_real_estate",
-    categoryName: "Casas y Apartamentos",
-    department: "San Salvador",
-    location: "Colonia Escalón, San Salvador",
-    image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80",
-    description: "Alquiler temporal o larga estancia. Totalmente amueblado con luz natural todo el día. Aire acondicionado frío/calor.",
-    likesCount: 64,
-    isLiked: false,
-    viewsCount: 890,
-    createdAt: "Hace 5 horas",
-    publishedTimestamp: 1729980000000,
-    status: "aprobado",
-    featured: false,
-    seller: {
-      id: "usr-02",
-      name: "Inmobiliaria Viva Sol",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
-      rating: 4.8,
-      reviewsCount: 112,
-      verified: true
-    }
-  },
-  {
-    id: "prod-103",
-    title: "Honda Civic Sport 2021 Automático",
-    price: 18900,
-    currency: "USD",
-    mainCategory: "producto",
-    mainCategoryName: "Producto",
-    subcategory: "vehicles",
-    subcategoryName: "Vehículos y Repuestos",
-    category: "vehicles",
-    categoryName: "Vehículos y Repuestos",
-    department: "La Libertad",
-    location: "Santa Tecla, La Libertad",
-    image: "https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=800&q=80",
-    description: "35,000 km, mantenimientos al día en concesionario oficial. Llantas deportivas de 18 pulgadas, Apple CarPlay.",
-    likesCount: 52,
-    isLiked: false,
-    viewsCount: 730,
-    createdAt: "Hace 1 día",
-    publishedTimestamp: 1729900000000,
-    featuredTimestamp: 1729900000000,
-    status: "aprobado",
-    featured: true,
-    seller: {
-      id: "usr-03",
-      name: "Andrés Silva",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      rating: 4.7,
-      reviewsCount: 18,
-      verified: false
-    }
-  },
-  {
-    id: "prod-104",
-    title: "Desarrollo Web Full-Stack & Apps Móviles React Native",
-    price: 45,
-    currency: "USD/hora",
-    mainCategory: "servicio",
-    mainCategoryName: "Servicio",
-    subcategory: "tech_services",
-    subcategoryName: "Tecnología y Soporte IT",
-    category: "tech_services",
-    categoryName: "Tecnología y Soporte IT",
-    department: "San Salvador",
-    location: "San Salvador, El Salvador",
-    image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-    description: "Creación de landing pages, plataformas PWA, sistemas a medida con React, Node y Firebase. Presupuesto sin compromiso.",
-    likesCount: 89,
-    isLiked: false,
-    viewsCount: 1204,
-    createdAt: "Hace 2 días",
-    publishedTimestamp: 1729850000000,
-    status: "aprobado",
-    featured: false,
-    seller: {
-      id: "usr-admin",
-      name: "Admin Webmaster",
-      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-      rating: 5.0,
-      reviewsCount: 67,
-      verified: true
-    }
-  },
-  {
-    id: "prod-105",
-    title: "Sony Alpha A7 IV + Lente 24-70mm GM f/2.8",
-    price: 2400,
-    currency: "USD",
-    mainCategory: "producto",
-    mainCategoryName: "Producto",
-    subcategory: "tech",
-    subcategoryName: "Tecnología y Celulares",
-    category: "tech",
-    categoryName: "Tecnología y Celulares",
-    department: "Santa Ana",
-    location: "Santa Ana, El Salvador",
-    image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80",
-    description: "Cámara profesional de 33MP ideal para video y fotografía. Menos de 4,000 disparos de obturador.",
-    likesCount: 41,
-    isLiked: false,
-    viewsCount: 390,
-    createdAt: "Hace 3 días",
-    publishedTimestamp: 1729750000000,
-    status: "pendiente", // En cola de moderación
-    featured: false,
-    seller: {
-      id: "usr-04",
-      name: "Lucía Morales",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
-      rating: 4.6,
-      reviewsCount: 9,
-      verified: false
-    }
-  },
-  {
-    id: "prod-106",
-    title: "Sofá Escandinavo 3 Plazas Chaise Longue Gris",
-    price: 420,
-    currency: "USD",
-    mainCategory: "producto",
-    mainCategoryName: "Producto",
-    subcategory: "home",
-    subcategoryName: "Hogar y Muebles",
-    category: "home",
-    categoryName: "Hogar y Muebles",
-    department: "San Miguel",
-    location: "San Miguel, El Salvador",
-    image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80",
-    description: "Tapizado en tela impermeable antimanchas. Como nuevo, apenas 6 meses de uso por mudanza.",
-    likesCount: 19,
-    isLiked: false,
-    viewsCount: 210,
-    createdAt: "Hace 4 días",
-    publishedTimestamp: 1729650000000,
-    status: "aprobado",
-    featured: false,
-    seller: {
-      id: "usr-05",
-      name: "Mateo Gómez",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-      rating: 4.5,
-      reviewsCount: 7,
-      verified: true
-    }
-  }
-];
+// Colección vacía para publicaciones: la web inicia sin publicaciones mock de prueba
+export const MOCK_PRODUCTS = [];
 
+// Lista de usuarios inicial: únicamente el Webmaster Administrador
 export const MOCK_USERS = [
   {
     id: "usr-admin",
@@ -317,77 +130,21 @@ export const MOCK_USERS = [
     role: "admin",
     avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
     joinedDate: "15 Ene 2024",
-    status: "activo", // activo | suspendido
-    postsCount: 12,
-    reportedCount: 0
-  },
-  {
-    id: "usr-01",
-    name: "Carlos Méndez",
-    email: "carlos.m@example.com",
-    role: "user",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-    joinedDate: "03 Feb 2024",
     status: "activo",
-    postsCount: 4,
+    postsCount: 0,
     reportedCount: 0
-  },
-  {
-    id: "usr-02",
-    name: "Inmobiliaria Viva Sol",
-    email: "contacto@vivasol.es",
-    role: "user",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
-    joinedDate: "10 Mar 2024",
-    status: "activo",
-    postsCount: 19,
-    reportedCount: 1
-  },
-  {
-    id: "usr-spammer",
-    name: "Bot Ofertas Rápidas",
-    email: "spam.crypto@fake.org",
-    role: "user",
-    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80",
-    joinedDate: "20 May 2024",
-    status: "suspendido",
-    postsCount: 34,
-    reportedCount: 14
   }
 ];
 
-export const MOCK_ADS = [
-  {
-    id: "ad-01",
-    title: "Seguros Auto Premium - 20% de Descuento",
-    advertiser: "Aseguradora Global",
-    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80",
-    link: "https://example.com/promo-seguros",
-    impressions: 14230,
-    clicks: 840,
-    status: "activo",
-    placement: "feed_banner"
-  },
-  {
-    id: "ad-02",
-    title: "Cursos de Programación con IA y Certificación",
-    advertiser: "Tech Academy Online",
-    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
-    link: "https://example.com/academia",
-    impressions: 9840,
-    clicks: 520,
-    status: "activo",
-    placement: "sidebar_admin"
-  }
-];
+export const MOCK_ADS = [];
 
 export const MOCK_ADMIN_STATS = {
-  totalUsers: 1248,
-  usersGrowth: "+12.4% este mes",
-  activeListings: 3520,
-  listingsGrowth: "+8.1% esta semana",
-  pendingModeration: 7,
-  reportedItems: 3,
-  adRevenue: "$4,280 USD",
-  adRevenueGrowth: "+18.2% vs mes anterior"
+  totalUsers: 1,
+  usersGrowth: "0% este mes",
+  activeListings: 0,
+  listingsGrowth: "0% esta semana",
+  pendingModeration: 0,
+  reportedItems: 0,
+  adRevenue: "$0.00 USD",
+  adRevenueGrowth: "0% vs mes anterior"
 };

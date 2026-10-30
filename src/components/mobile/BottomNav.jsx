@@ -1,15 +1,36 @@
 // Barra de navegación inferior fija para la experiencia Mobile-First
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Compass, PlusCircle, User } from "lucide-react";
+import { Home, MessageCircle, PlusCircle, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { getTotalUnreadCount, CHAT_EVENT } from "../../services/chatService";
 
 export const BottomNav = () => {
   const { currentUser } = useAuth();
   const location = useLocation();
 
-  // En la vista de chat individual o pasarela Pagadito Sandbox, se oculta el BottomNav
-  if (location.pathname.startsWith("/messages/") || location.pathname.startsWith("/pagadito-sandbox/")) {
+  // Contador reactivo de mensajes no leídos para la pestaña de Chats
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(() =>
+    getTotalUnreadCount(currentUser)
+  );
+
+  useEffect(() => {
+    setUnreadMessagesCount(getTotalUnreadCount(currentUser));
+
+    const handleChatUpdate = () => {
+      setUnreadMessagesCount(getTotalUnreadCount(currentUser));
+    };
+
+    window.addEventListener(CHAT_EVENT, handleChatUpdate);
+    return () => window.removeEventListener(CHAT_EVENT, handleChatUpdate);
+  }, [currentUser]);
+
+  // En la vista de chat individual, pasarela Pagadito Sandbox o retorno de pago, se oculta el BottomNav
+  if (
+    location.pathname.startsWith("/messages/") ||
+    location.pathname.startsWith("/pagadito-sandbox/") ||
+    location.pathname.startsWith("/payment-return")
+  ) {
     return null;
   }
 
@@ -21,9 +42,10 @@ export const BottomNav = () => {
       exact: true
     },
     {
-      to: "/explore",
-      label: "Explorar",
-      icon: Compass
+      to: "/messages",
+      label: "Chats",
+      icon: MessageCircle,
+      badge: unreadMessagesCount
     },
     {
       to: "/publish",
@@ -46,6 +68,18 @@ export const BottomNav = () => {
           const Icon = item.icon;
 
           const handleTabClick = (e) => {
+            // Rastrear si la navegación hacia Chats proviene del menú inferior (footer)
+            if (typeof window !== "undefined") {
+              // Si el usuario usa las pestañas inferiores, se descarta el retorno pendiente por toast
+              sessionStorage.removeItem("anunciossv_toast_return_origin");
+
+              if (item.to === "/messages") {
+                sessionStorage.setItem("anunciossv_messages_from_footer", "true");
+              } else {
+                sessionStorage.removeItem("anunciossv_messages_from_footer");
+              }
+            }
+
             if (location.pathname === "/publish" && item.to !== "/publish") {
               const event = new CustomEvent("anunciossv_publish_leave_requested", {
                 detail: { targetPath: item.to },
@@ -94,6 +128,7 @@ export const BottomNav = () => {
             <NavLink
               key={item.to}
               to={item.to}
+              state={item.to === "/messages" ? { fromBottomNav: true } : undefined}
               end={item.exact}
               onClick={handleTabClick}
               className={({ isActive }) => `
@@ -104,7 +139,7 @@ export const BottomNav = () => {
               {({ isActive }) => (
                 <>
                   <div className="relative">
-                    {item.hasAvatar && currentUser ? (
+                    {item.hasAvatar && currentUser?.avatar ? (
                       <img
                         src={currentUser.avatar}
                         alt="Perfil"
@@ -114,6 +149,13 @@ export const BottomNav = () => {
                       />
                     ) : (
                       <Icon className={`w-5 h-5 transition-transform ${isActive ? "scale-110" : "group-hover:scale-105"}`} />
+                    )}
+
+                    {/* Badge numérico de mensajes no leídos para Chats */}
+                    {item.badge > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 bg-pink-500 text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-slate-900 shadow-sm animate-fade-in">
+                        {item.badge > 9 ? "9+" : item.badge}
+                      </span>
                     )}
 
                     {/* Punto indicador de pestaña activa */}

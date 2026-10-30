@@ -1,7 +1,7 @@
-// Diálogo modal que informa al usuario invitado que debe iniciar sesión para realizar una acción
+// Diálogo modal que informa al usuario invitado que debe iniciar sesión o registrarse para realizar una acción
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { LogIn, Heart, MessageCircle, X } from "lucide-react";
+import { LogIn, UserPlus, Heart, MessageCircle, Sparkles, Star, X } from "lucide-react";
 
 export const AuthRequiredModal = ({
   isOpen,
@@ -14,15 +14,32 @@ export const AuthRequiredModal = ({
 
   if (!isOpen) return null;
 
-  const handleGoToLogin = () => {
+  const handleGoToAuth = (mode = "login") => {
     onClose?.();
     navigate("/login", {
-      state: { from: { pathname: window.location.pathname + window.location.search } }
+      state: {
+        mode,
+        from: { pathname: window.location.pathname + window.location.search }
+      }
     });
   };
 
   // Ícono contextual según el tipo de acción
   const renderIcon = () => {
+    if (actionType === "rate") {
+      return (
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+          <Star className="w-7 h-7 fill-amber-400" />
+        </div>
+      );
+    }
+    if (actionType === "promote") {
+      return (
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+          <Sparkles className="w-7 h-7 fill-amber-400/30" />
+        </div>
+      );
+    }
     if (actionType === "like") {
       return (
         <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-500/10">
@@ -45,15 +62,23 @@ export const AuthRequiredModal = ({
   };
 
   const defaultTitle =
-    actionType === "like"
+    actionType === "rate"
+      ? "¿Calificar a este vendedor?"
+      : actionType === "promote"
+      ? "¿Deseas destacar este anuncio?"
+      : actionType === "like"
       ? "¿Guardar en tus favoritos?"
       : actionType === "message"
       ? "¿Contactar al vendedor?"
       : "Inicia sesión para continuar";
 
   const defaultMessage =
-    actionType === "like"
-      ? "Inicia sesión para poder guardar esta publicación en tus favoritos y consultarla cuando quieras."
+    actionType === "rate"
+      ? "Inicia sesión o regístrate en AnunciosSV para valorar la reputación de este vendedor con estrellas."
+      : actionType === "promote"
+      ? "Inicia sesión o regístrate en AnunciosSV para destacar este anuncio y aumentar su visibilidad."
+      : actionType === "like"
+      ? "Inicia sesión para poder guardar esta publicación y consultarla cuando quieras."
       : actionType === "message"
       ? "Inicia sesión para comunicarte directamente con el vendedor y consultar tus conversaciones."
       : "Debes iniciar sesión con tu cuenta para poder realizar esta acción.";
@@ -63,7 +88,7 @@ export const AuthRequiredModal = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
-      className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-backdrop-enter"
     >
       <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 shadow-2xl animate-scale-up text-center relative overflow-hidden">
         {/* Botón de cierre superior */}
@@ -89,22 +114,33 @@ export const AuthRequiredModal = ({
           </p>
         </div>
 
-        {/* Botones de decisión */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        {/* Botones de decisión: Iniciar Sesión y Registrarse */}
+        <div className="space-y-2.5 pt-2">
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleGoToAuth("login")}
+              className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Iniciar Sesión</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleGoToAuth("register")}
+              className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white font-bold text-xs border border-indigo-500/30 transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Registrarse</span>
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="w-full min-h-[46px] py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all active:scale-[0.99]"
+            className="w-full min-h-[34px] py-1 px-4 rounded-xl text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors"
           >
             Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleGoToLogin}
-            className="w-full min-h-[46px] py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>Iniciar Sesión</span>
           </button>
         </div>
       </div>

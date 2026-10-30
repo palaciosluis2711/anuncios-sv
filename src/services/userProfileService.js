@@ -189,7 +189,7 @@ export const savePublicProfile = (profileData) => {
 /**
  * Resuelve el avatar más fresco de un usuario o devuelve el fallback si no existe
  */
-export const resolveUserAvatar = (userOrIdentifier, fallbackAvatar = "") => {
+export const resolveUserAvatar = (userOrIdentifier, fallbackAvatar = null) => {
   const profile = getPublicProfile(userOrIdentifier);
   if (profile?.avatar) {
     return profile.avatar;
@@ -197,5 +197,5 @@ export const resolveUserAvatar = (userOrIdentifier, fallbackAvatar = "") => {
   if (typeof userOrIdentifier === "object" && userOrIdentifier?.avatar) {
     return userOrIdentifier.avatar;
   }
-  return fallbackAvatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80";
+  return fallbackAvatar || null;
 };

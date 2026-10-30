@@ -1,12 +1,13 @@
 // Layout principal Desktop-First para el panel de administración del Webmaster
 import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import AdminSidebar from "../components/admin/AdminSidebar";
 import AdminHeader from "../components/admin/AdminHeader";
 import RoleSwitcherBanner from "../components/common/RoleSwitcherBanner";
 
 export const AdminLayout = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
@@ -21,8 +22,11 @@ export const AdminLayout = () => {
         {/* Barra superior de administración */}
         <AdminHeader setIsMobileOpen={setIsMobileOpen} />
 
-        {/* Vista dinámica de la ruta hija */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        {/* Vista dinámica de la ruta hija con transición suave */}
+        <main
+          key={location.pathname}
+          className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto animate-page-enter"
+        >
           <Outlet />
         </main>
       </div>

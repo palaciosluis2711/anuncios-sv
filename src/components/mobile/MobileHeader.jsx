@@ -1,9 +1,11 @@
 // Encabezado superior adaptativo para la experiencia móvil
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingBag, Bell, Shield, ArrowLeft, Share2, MessageCircle, Sparkles } from "lucide-react";
+import { ShoppingBag, Bell, Shield, ArrowLeft, Share2, MessageCircle, Sparkles, Star, Edit3 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getTotalUnreadCount, CHAT_EVENT } from "../../services/chatService";
+import { getUnreadNotificationsCount, NOTIFICATION_EVENT } from "../../services/notificationService";
+import { shareContent } from "../../services/shareService";
 
 export const MobileHeader = () => {
   const { isAdmin, currentUser } = useAuth();
@@ -11,6 +13,7 @@ export const MobileHeader = () => {
   const navigate = useNavigate();
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(() => getTotalUnreadCount(currentUser));
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(() => getUnreadNotificationsCount(currentUser));
 
   // Control de visibilidad del header al desplazarse en el feed principal
   const [showHeader, setShowHeader] = useState(true);
@@ -28,17 +31,31 @@ export const MobileHeader = () => {
   const isBlockedUsersPage = pathname === "/blocked-users";
   const isPromoteAdPage = pathname.startsWith("/promote-ad/");
   const isPagaditoSandboxPage = pathname.startsWith("/pagadito-sandbox/");
+  const isPaymentReturnPage = pathname.startsWith("/payment-return");
+  const isReputationPage = pathname === "/profile/reputation";
+  const isNotificationsPage = pathname === "/notifications";
+  const isEditProfilePage = pathname === "/profile/edit";
 
-  // Suscripción al contador global de mensajes no leídos
+  // Suscripción al contador global de mensajes y notificaciones no leídos
   useEffect(() => {
     setUnreadMessagesCount(getTotalUnreadCount(currentUser));
+    setUnreadNotificationsCount(getUnreadNotificationsCount(currentUser));
 
     const handleChatUpdate = () => {
       setUnreadMessagesCount(getTotalUnreadCount(currentUser));
     };
 
+    const handleNotifUpdate = () => {
+      setUnreadNotificationsCount(getUnreadNotificationsCount(currentUser));
+    };
+
     window.addEventListener(CHAT_EVENT, handleChatUpdate);
-    return () => window.removeEventListener(CHAT_EVENT, handleChatUpdate);
+    window.addEventListener(NOTIFICATION_EVENT, handleNotifUpdate);
+
+    return () => {
+      window.removeEventListener(CHAT_EVENT, handleChatUpdate);
+      window.removeEventListener(NOTIFICATION_EVENT, handleNotifUpdate);
+    };
   }, [currentUser]);
 
   // Función segura para retornar atrás con el MISMO comportamiento que el gesto táctil nativo del celular
@@ -52,12 +69,12 @@ export const MobileHeader = () => {
 
   // Función para compartir publicación
   const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({ title: document.title, url: window.location.href }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(window.location.href);
-      alert("Enlace copiado al portapapeles");
-    }
+    const title = document.title || "AnunciosSV";
+    shareContent({
+      title: title,
+      text: `Mira este anuncio en AnunciosSV: ${title}`,
+      url: window.location.href
+    });
   };
 
   // Ocultar cabecera al desplazarse hacia abajo en el feed principal
@@ -88,8 +105,8 @@ export const MobileHeader = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHome]);
 
-  // 1. En registro, login, Centro de Control, Bandeja, Chat individual, Usuarios Bloqueados o Pagadito Sandbox: NO se muestra el header global
-  if (isLoginPage || isManageProductPage || isMessagesPage || isChatDetailPage || isBlockedUsersPage || isPagaditoSandboxPage) {
+  // 1. En registro, login, Centro de Control, Bandeja, Chat individual, Usuarios Bloqueados, Pagadito Sandbox o Retorno de Pago: NO se muestra el header global
+  if (isLoginPage || isManageProductPage || isMessagesPage || isChatDetailPage || isBlockedUsersPage || isPagaditoSandboxPage || isPaymentReturnPage) {
     return null;
   }
 
@@ -168,10 +185,14 @@ export const MobileHeader = () => {
     );
   }
 
-  // 4. En Destacar Anuncio: cabecera fija con botón de retorno y título "Destacar anuncio"
-  if (isPromoteAdPage) {
+  // 4. En Destacar Anuncio, Reputación del Usuario, Notificaciones o Editar Perfil: cabecera fija con botón de retorno y título
+  if (isPromoteAdPage || isReputationPage || isNotificationsPage || isEditProfilePage) {
     return (
-      <header className="sticky top-0 z-50 bg-slate-950 border-b border-slate-800/90 px-4 py-2.5 shadow-md">
+      <header
+        className={`sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/90 px-4 py-2.5 shadow-md ${
+          isNotificationsPage ? "animate-header-enter" : ""
+        }`}
+      >
         <div className="max-w-md mx-auto flex items-center justify-between">
           <button
             type="button"
@@ -184,8 +205,27 @@ export const MobileHeader = () => {
           </button>
 
           <span className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
-            <span>Destacar anuncio</span>
+            {isNotificationsPage ? (
+              <>
+                <Bell className="w-4 h-4 text-pink-400" />
+                <span>Notificaciones</span>
+              </>
+            ) : isReputationPage ? (
+              <>
+                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span>Reputación</span>
+              </>
+            ) : isEditProfilePage ? (
+              <>
+                <Edit3 className="w-4 h-4 text-indigo-400" />
+                <span>Editar Perfil</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span>Destacar anuncio</span>
+              </>
+            )}
           </span>
 
           <div className="w-10 flex-shrink-0" />
@@ -232,6 +272,12 @@ export const MobileHeader = () => {
           {/* Botón de Mensajes directos con contador reactivo */}
           <Link
             to="/messages"
+            state={{ fromBottomNav: false }}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                sessionStorage.removeItem("anunciossv_messages_from_footer");
+              }
+            }}
             aria-label="Mensajes"
             title="Bandeja de mensajes"
             className="relative p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
@@ -245,13 +291,19 @@ export const MobileHeader = () => {
           </Link>
 
           {/* Notificaciones */}
-          <button
+          <Link
+            to="/notifications"
             aria-label="Notificaciones"
+            title="Bandeja de notificaciones"
             className="relative p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full ring-2 ring-slate-950 animate-pulse" />
-          </button>
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-pink-500 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-slate-950 animate-fade-in shadow-sm">
+                {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
     </header>

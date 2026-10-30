@@ -11,14 +11,19 @@ import {
   UserX,
   Clock
 } from "lucide-react";
-import { MOCK_PRODUCTS } from "../../services/mockData";
+import { getStoredProducts, updateProduct } from "../../services/productsService";
 
 export const AdminModeration = () => {
-  const [products, setProducts] = useState(MOCK_PRODUCTS);
+  const [products, setProducts] = useState(() => getStoredProducts());
   const [filterStatus, setFilterStatus] = useState("pendiente"); // "todos" | "pendiente" | "aprobado" | "rechazado"
 
   // Acciones de moderación interactivas
-  const handleUpdateStatus = (id, newStatus) => {
+  const handleUpdateStatus = async (id, newStatus) => {
+    try {
+      await updateProduct(id, { status: newStatus });
+    } catch (e) {
+      console.warn("Aviso al actualizar moderación en storage:", e);
+    }
     setProducts((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
     );

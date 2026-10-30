@@ -77,82 +77,86 @@ export const AdminUsers = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
-                  {/* Avatar y datos */}
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-10 h-10 rounded-full object-cover border border-slate-700"
-                      />
-                      <div>
-                        <div className="font-bold text-white text-sm">{user.name}</div>
-                        <div className="text-slate-400 text-xs">{user.email}</div>
-                        <div className="text-[10px] text-slate-500">Miembro desde {user.joinedDate}</div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Rol */}
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                      user.role === "admin"
-                        ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
-                        : "bg-blue-500/10 text-blue-300 border-blue-500/30"
-                    }`}>
-                      {user.role === "admin" ? "👑 Webmaster" : "👤 Estándar"}
-                    </span>
-                  </td>
-
-                  {/* Estado */}
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border uppercase ${
-                      user.status === "activo"
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                        : "bg-red-500/10 text-red-400 border-red-500/30 animate-pulse"
-                    }`}>
-                      {user.status}
-                    </span>
-                  </td>
-
-                  {/* Cantidad de publicaciones */}
-                  <td className="p-4 font-semibold text-slate-300">
-                    {user.postsCount} anuncios
-                  </td>
-
-                  {/* Reportes */}
-                  <td className="p-4">
-                    {user.reportedCount > 0 ? (
-                      <span className="flex items-center gap-1 text-red-400 font-bold">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        {user.reportedCount} denuncias
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">0</span>
-                    )}
-                  </td>
-
-                  {/* Acciones */}
-                  <td className="p-4 text-right">
-                    {user.role !== "admin" ? (
-                      <button
-                        onClick={() => handleToggleSuspend(user.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                          user.status === "activo"
-                            ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                            : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                        }`}
-                      >
-                        {user.status === "activo" ? "Suspender Cuenta" : "Reactivar Cuenta"}
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-slate-500 italic">Inmutable</span>
-                    )}
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="p-8 text-center text-slate-500 text-xs">
+                    No se encontraron usuarios registrados.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
+                    {/* Avatar y datos */}
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-10 h-10 rounded-full object-cover border border-slate-700"
+                        />
+                        <div>
+                          <div className="font-bold text-white text-sm">{user.name}</div>
+                          <div className="text-slate-400 text-xs">{user.email}</div>
+                          <div className="text-[10px] text-slate-500">Miembro desde {user.joinedDate}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Rol */}
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${user.role === "admin"
+                          ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                          : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                        }`}>
+                        {user.role === "admin" ? "👑 Webmaster" : "👤 Estándar"}
+                      </span>
+                    </td>
+
+                    {/* Estado */}
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border uppercase ${user.status === "activo"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/10 text-red-400 border-red-500/30 animate-pulse"
+                        }`}>
+                        {user.status}
+                      </span>
+                    </td>
+
+                    {/* Cantidad de publicaciones */}
+                    <td className="p-4 font-semibold text-slate-300">
+                      {user.postsCount} anuncios
+                    </td>
+
+                    {/* Reportes */}
+                    <td className="p-4">
+                      {user.reportedCount > 0 ? (
+                        <span className="flex items-center gap-1 text-red-400 font-bold">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          {user.reportedCount} denuncias
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">0</span>
+                      )}
+                    </td>
+
+                    {/* Acciones */}
+                    <td className="p-4 text-right">
+                      {user.role !== "admin" ? (
+                        <button
+                          onClick={() => handleToggleSuspend(user.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${user.status === "activo"
+                              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
+                              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            }`}
+                        >
+                          {user.status === "activo" ? "Suspender Cuenta" : "Reactivar Cuenta"}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-500 italic">Inmutable</span>
+                      )}
+                    </td>
+                  </tr>
+                )))}
             </tbody>
           </table>
         </div>
